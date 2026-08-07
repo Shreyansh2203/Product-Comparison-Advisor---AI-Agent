@@ -1,0 +1,371 @@
+{
+  "Specification": {
+    "dataPipeline": {
+      "pipelineNodes": [
+        {
+          "metadata": {
+            "description": "End of data pipeline",
+            "name": "End"
+          },
+          "outcomes": {},
+          "code": "END",
+          "id": "end",
+          "inputs": [],
+          "type": "END"
+        }
+      ],
+      "rootNode": "end",
+      "variables": [],
+      "errorHandlers": [
+        {
+          "type": "EMAIL",
+          "inputs": [
+            {
+              "name": "toList",
+              "type": "string",
+              "value": ""
+            },
+            {
+              "name": "ccList",
+              "type": "string",
+              "value": ""
+            },
+            {
+              "name": "subject",
+              "type": "string",
+              "value": ""
+            },
+            {
+              "name": "body",
+              "type": "string",
+              "value": ""
+            }
+          ]
+        }
+      ]
+    },
+    "modelConfiguration": {
+      "modelProperties": {
+        "k": 0,
+        "max_completion_tokens": 8000,
+        "reasoning_effort": "medium"
+      },
+      "code": "ORA_MODEL_CONFIG_PREMIUM_OPEN_AI_GPT_4_1_MINI",
+      "model": "OCI_GPT_5_MINI",
+      "modelName": "Gpt-5 Mini",
+      "provider": "CERT_PREMIUM"
+    },
+    "jsonSchemaName": "Workflow.spec",
+    "jsonSchemaVersion": "1",
+    "inputs": [],
+    "outputSpecification": " ",
+    "agentsValueMappings": [
+      {
+        "agentCode": "PRODUCT_COMPARATOR_V13",
+        "inputs": [],
+        "outputSpecification": ""
+      }
+    ],
+    "humanApprovalFlag": false,
+    "waitFlag": false,
+    "triggers": [
+      {
+        "type": "REST",
+        "inputs": []
+      }
+    ],
+    "deletedTriggerTypes": [],
+    "costSavings": 0,
+    "timeSavings": 10,
+    "chatExpTPFileUploadEnabledFlag": false,
+    "chatExpThirdPartyDetails": []
+  },
+  "WorkflowCode": "PRODUCT_COMPARATOR_V13",
+  "Name": "PRODUCT_COMPARATOR_V13",
+  "Description": "Our Product Comparison Advisor provides Product Designers, Product Managers and Quality Engineers an intelligent and automated way to compare products. The AI advisor Standards answer any questions a user may have on these comparison results.",
+  "Family": "SCM",
+  "Product": "PRODUCT_MANAGEMENT",
+  "HiddenFlag": false,
+  "AiAppsCompatibleFlag": false,
+  "UseCaseId": "NA",
+  "SourceWorkflowId": null,
+  "AccessModifier": "public",
+  "StartQuestionOne": null,
+  "StartQuestionTwo": null,
+  "StartQuestionThree": null,
+  "FollowUpPromptEnabledFlag": false,
+  "FollowUpPrompt": "Based on the following conversation: $param.system_context.chat_history generate $param.system_context.number_of_follow_up_questions\nfollow up questions only while strictly adhering to the JSON Schema format mentioned below. Remove the ```json markdown from the output.\nHere is the JSON Schema format the output should adhere to:\n[{\"question\": \"<put first question generated here>\"}, {\"question\": \"<put second question generated here>\"}, {\"question\": \"<put third question generated here>\"}",
+  "Architecture": "single_agent",
+  "MaximumInteractions": null,
+  "StartAgentId": null,
+  "agents": [
+    {
+      "Specification": {
+        "modelConfiguration": {
+          "modelProperties": {
+            "k": 0,
+            "max_completion_tokens": 8000,
+            "reasoning_effort": "medium"
+          },
+          "code": "ORA_MODEL_CONFIG_PREMIUM_OPEN_AI_GPT_4_1_MINI",
+          "model": "OCI_GPT_5_MINI",
+          "modelName": "Gpt-5 Mini",
+          "provider": "CERT_PREMIUM"
+        },
+        "jsonSchemaName": "Agent.spec",
+        "jsonSchemaVersion": "1",
+        "agentRole": "You are an intelligent agent that supports product managers in comparing different items and suggesting which ones are superior and in what aspects.",
+        "customFlag": true,
+        "sourceObjectCode": "ORA_PRODUCT_COMPARISON_ADVISOR",
+        "inputs": [],
+        "outputSpecification": " ",
+        "summarizationMode": "Custom",
+        "summarizationPrompt": "Based on chat history/tool responses, answer clearly.\nYou are an Enterprise Item Comparison Assistant. \n\n## STRICT FORMATTING RULES (CRITICAL):\n1. You MUST output RAW HTML. DO NOT output Markdown (no `|` tables). The frontend relies on your HTML tags to render the premium UI.\n2. HALLUCINATION PREVENTION: Never invent data. If an attribute is missing, empty, or null in the tool payload, you MUST output nothing or \"-\" in the cell.\n\nCOLUMNS: N = items compared. Output N+1 columns (Attribute + one per item).\nDIFFERENCES: Compare exact strings. If different, apply `background-color: #ffe6e6; font-weight: bold; color: #cc0000;` to the ENTIRE row (`<tr>`) so the attribute name and all value cells are highlighted.\n\nATTRIBUTE WHITELIST (CRITICAL): Render ONLY the attributes listed in the system prompt, in that exact order, grouped by the headers specified. Item Number is always the first row, under Overview.\n3. DO NOT COLLAPSE: You MUST print a separate `<tr>` row for EVERY single attribute listed in the whitelist, even if the value is missing or empty. NEVER group them into a single row like \"Extended Attributes\".\n\nTEMPLATE:\n<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"UTF-8\">\n<style>\n  .agy-table { width:100%; border-collapse:collapse; margin:15px 0; font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif; font-size:14px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-radius: 8px; overflow: hidden; }\n  .agy-table th { background-color:#f4f5f7; color:#172b4d; padding:12px; text-align:left; border-bottom:2px solid #dfe1e6; }\n  .agy-table td { padding:10px 12px; border-bottom:1px solid #dfe1e6; color:#091e42; }\n  .agy-section { background-color:#e9ecef !important; color:#495057; text-transform:uppercase; font-size:12px; letter-spacing:0.5px; }\n  .agy-summary { font-family:-apple-system,sans-serif; color:#333; line-height:1.6; font-size:14px; }\n</style>\n</head>\n<body>\n<p class=\"agy-summary\"><b>Total Items Compared: N</b></p>\n<table class=\"agy-table\">\n<thead>\n<tr><th style=\"width:25%;\">Attribute</th><th>ItemNumber1</th><!-- N columns --></tr>\n</thead>\n<tbody>\n<!-- For each section (Overview, Product Details, etc.): -->\n<tr class=\"agy-section\"><th colspan=\"{N+1}\"><b>[Section Name]</b></th></tr>\n<!-- For each attribute in section (Apply highlight styles to the <tr> if values differ): -->\n<tr><td>[Attribute Name]</td><td>{val}</td><!-- N cells --></tr>\n</tbody>\n</table>\n\n<div class=\"agy-summary\">\n<h3>Business Summary</h3>\n<p>[Objective summary]</p>\n<h3>Cross-Module Insights</h3>\n<ul>\n<li><b>Inventory:</b> [Insight]</li>\n<li><b>Procurement:</b> [Insight]</li>\n<li><b>Planning:</b> [Insight]</li>\n</ul>\n<h3>Key Differences</h3>\n<ul><li>[Differences]</li></ul>\n</div>\n</body></html>"
+      },
+      "AgentCode": "PRODUCT_COMPARATOR_V13",
+      "Name": "PRODUCT_COMPARATOR_V13",
+      "Description": "Our Product Comparison Advisor provides Product Designers, Product Managers and Quality Engineers an intelligent and automated way to compare products. The AI advisor Standards answer any questions a user may have on these comparison results.",
+      "Family": "SCM",
+      "Product": "PRODUCT_MANAGEMENT",
+      "ModuleId": null,
+      "Namespace": "SCM.PRODUCT_MANAGEMENT",
+      "SeededFlag": false,
+      "PromptCode": null,
+      "Version": 4,
+      "MaximumInteractions": 20,
+      "AgentType": "WORKER",
+      "Prompt": "You are the Oracle Fusion Product Comparison Advisor. Compare Oracle Fusion items accurately and securely.\n\n## TOOL EXECUTION PROTOCOL (CRITICAL)\n1. SEQUENTIAL EXECUTION (CRITICAL): First, call `Get_Operational_Attribute_Values` using the ItemNumber. Wait for the response and extract BOTH the internal 15-digit `ItemId` AND the `OrganizationId`. THEN, call `Get_Extended_Attribute_Values` passing the `ItemId` and `OrganizationId`. You MUST NOT call these in parallel.\n2. MISSING ITEMS: If a tool returns an error or no data for an item, inform the user that the specific item was not found and proceed with comparing the valid items. Do not crash.\n3. CONTEXT MINIMIZATION: Retain only Item Numbers, Organization, filters, options, and final summary in your context window. Discard raw JSON payloads immediately after extracting necessary fields.\n\n## STANDARD COMPARISON ATTRIBUTES (Retrieve ONLY these):\n- Overview: Description, Item Status, Lifecycle Phase, User Item Type, Long Description, Primary Unit of Measure, Secondary Unit of Measure\n- Product Details (ITEM_EXTENDED_ATTRIBUTES): Packaging Size, Packable Size, Sample Reporting, Control Organism, Transportation Method, Internal Description, Net Weight Unit, Net Weight Value, Brand Type, Product Line, Factory Formula (FFN), FFN Description, GTS Flag, Process Flow Rate, Packaging Type, Equipment Type, Shipping Status, Package Format, ePIF ID, Company Brand, Attribute, Minimum Order Qty, ABC Class, Container Fill Ratio, Cases Per Pallet, Country of Origin, ECCN Number, DOT Shipping Description, DOT Exception, International Shipping Description, Manufactured Description, 3rd Party Testing Required, Nutrient Class\n- Manufacturing: Contract Manufacturing\n- Inventory: Material Control, Inventory Item, Stocked, Transaction Enabled, Lot Control, Lot Expiration, Lot Expiration Control, Status, Lot Status Enabled, Default Lot Status\n- Physical Attributes: Weight, Unit Weight\n- Sales & Order Management: Sales Account\n- Planning: General Planning, Planning Method, Make or Buy, Planner, MPS/MRP Planning, Costing, Cumulative Total\n- Purchasing: Purchasable\n## COMPARISON RULES (ABSOLUTELY CRITICAL - DO NOT VIOLATE):\n- FATAL ERROR IF VIOLATED: You MUST convert all boolean values (`true`/`false`) to 'Yes'/'No' in your final output. NEVER, under any circumstances, output the raw string 'true' or 'false'.\n- FATAL ERROR IF VIOLATED: You MUST NEVER output internal database codes (like '1', '2', '4', or '-'). You MUST map them to their display meanings. For example, for Lot Control, '2' means 'Full Control'. If a meaning is missing, output 'N/A'.\n- FATAL ERROR IF VIOLATED: You MUST ONLY output the exact fields listed in the `STANDARD COMPARISON ATTRIBUTES` section above. NEVER include unrequested fields like `List Price`, `Orderable On Web Flag`, or `Shelf Life Days`.\n- Group the fields EXACTLY by the section headers defined above.\n- If requested \"Show only differences\", display only differing attributes.\n- Highlight differing rows using HTML/CSS exactly as requested in the summarization prompt.\n- CRITICAL JSON REDUCTION: The API now returns a vastly reduced JSON using the fields parameter. It contains exactly what you need.\n- BOOLEAN TRANSLATION EXAMPLE: If the JSON has `\"ContractManufacturingFlag\": true`, you MUST output `Yes`. If it is `false`, output `No`. NEVER output `true` or `false`.\n- LOOKUP CODES: Map `LotControlCode` 2 to 'Full Control', 1 to 'No Control'. Map `DefaultLotStatusId` 1 to 'Active', null/'-' to 'N/A'.\n",
+      "ModelConfigId": null,
+      "ReusableFlag": false,
+      "tools": [
+        {
+          "Specification": {},
+          "RestTool": {
+            "ObjectProperties": {
+              "jsonSchemaName": "SupportedBusinessObject.objectProperties",
+              "jsonSchemaVersion": 1,
+              "tools": [
+                {
+                  "bodyTemplate": "",
+                  "description": "Get Item extended attribute values by inventory item identifier.",
+                  "id": 9,
+                  "isNew": false,
+                  "name": "Get_Extended_Attribute_Values",
+                  "operationType": "GET",
+                  "parameterDefinitions": [
+                    {
+                      "dataType": "string",
+                      "description": "Item id, item identifier or inventory item id",
+                      "id": 12,
+                      "isToken": true,
+                      "name": "ItemId"
+                    }
+                  ],
+                  "resourcePath": "/fscmRestApi/resources/11.13.18.05/itemExtendedAttributes?q=InventoryItemId='{ItemId}'&expand=all&onlyData=True",
+                  "resourceType": "ADF_BC_FIXED_QUERY",
+                  "sampleQueries": [],
+                  "type": "BUS_OBJECT"
+                }
+              ]
+            },
+            "ObjectCode": "ORA_SCM_PRODUCTMAN_ITEMEXTENDEDATT",
+            "Family": "SCM",
+            "Product": "PRODUCT_MANAGEMENT",
+            "ObjectSource": "ADF_BC",
+            "Category": null,
+            "RestResourcePath": "/fscmRestApi/resources/11.13.18.05/itemExtendedAttributes",
+            "RestResourceIdentifier": "-1",
+            "RestSupportedOperations": "{}",
+            "ParentSupptObjectId": null,
+            "MandatoryFlag": false,
+            "SeededFlag": true,
+            "ObjectDisplayName": "Item Extended Attributes",
+            "Name": "Item Extended Attributes",
+            "Description": "The extended attribute or user defined attribute values of an item"
+          },
+          "ToolCode": "ORA_ITEM_EXTENDED_ATTRIBUTES",
+          "Type": "BUS_OBJECT",
+          "Name": "Item Extended Attribute Values Retriever",
+          "Description": "Retrieve Extended attribute values of an item",
+          "Family": "SCM",
+          "Product": "PRODUCT_MANAGEMENT",
+          "SeededFlag": true,
+          "HiddenFlag": true,
+          "ModuleId": "783FCACF438EDE58E040578C495D4541",
+          "Namespace": "SCM.PRODUCT_MANAGEMENT",
+          "Version": 1,
+          "UserInputRequiredFlag": false,
+          "UserInputMsg": null
+        },
+        {
+          "Specification": {},
+          "RestTool": {
+            "ObjectProperties": {
+              "jsonSchemaName": "SupportedBusinessObject.objectProperties",
+              "jsonSchemaVersion": 1,
+              "tools": [
+                {
+                  "bodyTemplate": "",
+                  "description": "Get item operational attribute values of a given item number and organization code",
+                  "id": 4,
+                  "isNew": false,
+                  "name": "Get_Operational_Attribute_Values",
+                  "operationType": "GET",
+                  "parameterDefinitions": [
+                    {
+                      "dataType": "string",
+                      "description": "Item Number, Component Item Number or Item",
+                      "id": 7,
+                      "isToken": true,
+                      "name": "ItemNumber"
+                    },
+                    {
+                      "dataType": "string",
+                      "description": "Organization Code",
+                      "id": 8,
+                      "isToken": true,
+                      "name": "OrgCode"
+                    }
+                  ],
+                  "resourcePath": "/fscmRestApi/resources/11.13.18.05/itemOperationalAttributes?q=ItemNumber='{ItemNumber}'%20AND%20OrganizationCode='{OrgCode}'&onlyData=true",
+                  "resourceType": "ADF_BC_FIXED_QUERY",
+                  "sampleQueries": [],
+                  "type": "BUS_OBJECT"
+                }
+              ]
+            },
+            "ObjectCode": "ORA_SCM_PRODUCTMAN_ITEMOPERATIONAL",
+            "Family": "SCM",
+            "Product": "PRODUCT_MANAGEMENT",
+            "ObjectSource": "ADF_BC",
+            "Category": null,
+            "RestResourcePath": "/fscmRestApi/resources/11.13.18.05/itemOperationalAttributes",
+            "RestResourceIdentifier": "-1",
+            "RestSupportedOperations": "{}",
+            "ParentSupptObjectId": null,
+            "MandatoryFlag": false,
+            "SeededFlag": true,
+            "ObjectDisplayName": "Item Operational Attributes",
+            "Name": "Item Operational Attributes",
+            "Description": "Get Item operational attribute values of an item"
+          },
+          "ToolCode": "ORA_ITEM_OPERATIONAL_ATTRIBUTES",
+          "Type": "BUS_OBJECT",
+          "Name": "Item Operational Attribute Values Retriever",
+          "Description": "This tool retrieves Operational attribute values of an item.",
+          "Family": "SCM",
+          "Product": "PRODUCT_MANAGEMENT",
+          "SeededFlag": true,
+          "HiddenFlag": true,
+          "ModuleId": "783FCACF438EDE58E040578C495D4541",
+          "Namespace": "SCM.PRODUCT_MANAGEMENT",
+          "Version": 1,
+          "UserInputRequiredFlag": false,
+          "UserInputMsg": null
+        },
+        {
+          "Specification": {
+            "jsonSchemaName": "Tool.spec",
+            "jsonSchemaVersion": "1"
+          },
+          "RestTool": {
+            "ObjectProperties": {
+              "jsonSchemaName": "SupportedBusinessObject.objectProperties",
+              "jsonSchemaVersion": 1,
+              "tools": [
+                {
+                  "bodyTemplate": "",
+                  "description": "Get product costs",
+                  "id": 0,
+                  "isNew": false,
+                  "name": "getProductCosts",
+                  "operationType": "GET",
+                  "parameterDefinitions": [
+                    {
+                      "dataType": "string",
+                      "description": "Item Number, Component Item Number or Item",
+                      "id": 6,
+                      "isToken": true,
+                      "name": "ItemNumber"
+                    },
+                    {
+                      "dataType": "string",
+                      "description": "Cost source",
+                      "id": 7,
+                      "isToken": false,
+                      "name": "ProductCosts.CostSource"
+                    },
+                    {
+                      "dataType": "string",
+                      "description": "Currency code",
+                      "id": 8,
+                      "isToken": false,
+                      "name": "ProductCosts.CurrencyCode"
+                    },
+                    {
+                      "dataType": "number",
+                      "description": "Last contract price",
+                      "id": 9,
+                      "isToken": false,
+                      "name": "ProductCosts.LastContractPrice"
+                    },
+                    {
+                      "dataType": "number",
+                      "description": "Material Cost",
+                      "id": 10,
+                      "isToken": false,
+                      "name": "ProductCosts.MaterialCost"
+                    }
+                  ],
+                  "resourcePath": "/fscmRestApi/resources/11.13.18.05/itemsV2?q=ItemNumber='{ItemNumber}'",
+                  "resourceType": "ADF_BC_FIXED_QUERY",
+                  "sampleQueries": [],
+                  "type": "BUS_OBJECT"
+                }
+              ]
+            },
+            "ObjectCode": "ORA_SCM_PRODUCTMAN_ITEMCOSTS",
+            "Family": "SCM",
+            "Product": "PRODUCT_MANAGEMENT",
+            "ObjectSource": "ADF_BC",
+            "Category": null,
+            "RestResourcePath": "/fscmRestApi/resources/11.13.18.05/itemsV2",
+            "RestResourceIdentifier": "-1",
+            "RestSupportedOperations": "{}",
+            "ParentSupptObjectId": null,
+            "MandatoryFlag": false,
+            "SeededFlag": true,
+            "ObjectDisplayName": "Item Costs",
+            "Name": "Item Costs",
+            "Description": "Get costs for an item"
+          },
+          "ToolCode": "ORA_ITEM_COSTS",
+          "Type": "BUS_OBJECT",
+          "Name": "Item Costs",
+          "Description": "This tool fetches the costs for an item.",
+          "Family": "SCM",
+          "Product": "PRODUCT_MANAGEMENT",
+          "SeededFlag": true,
+          "HiddenFlag": false,
+          "ModuleId": "783FCACF438EDE58E040578C495D4541",
+          "Namespace": "SCM.PRODUCT_MANAGEMENT",
+          "Version": 1,
+          "UserInputRequiredFlag": false,
+          "UserInputMsg": null
+        }
+      ],
+      "topics": []
+    }
+  ],
+  "agentMappings": [
+    {
+      "EdgeOrder": 0,
+      "AgentCode": "PRODUCT_COMPARATOR_V13",
+      "AgentTargetCode": "PRODUCT_COMPARATOR_V13"
+    }
+  ],
+  "partnerMetadata": {
+    "Description": "",
+    "Name": "gvhb"
+  }
+}
