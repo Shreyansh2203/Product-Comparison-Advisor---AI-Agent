@@ -1,45 +1,31 @@
-# Product Comparison Advisor - AI Agent
+# Product Comparison Advisor (AI Agent)
 
-An intelligent, autonomous AI Agent designed to help Product Designers, Product Managers, and Quality Engineers seamlessly compare Oracle Fusion products and items. 
+This repository contains the declarative workflow configuration for an enterprise AI agent that automates product comparisons within Oracle Fusion. 
 
-Developed and rigorously tested for enterprise deployment at **Verdesian Life Sciences**, this repository contains the declarative configuration and workflow definitions for an AI agent that integrates directly with Oracle Supply Chain Management (SCM) systems to generate dynamic, visually highlighted product comparisons.
+Developed and deployed for **Verdesian Life Sciences**, the agent integrates directly with Oracle Supply Chain Management (SCM) REST APIs to extract item attributes and generate dynamic comparison reports.
 
-## 🚀 Key Features
+## Architecture & Tech Stack
 
-*   **Intelligent Data Retrieval:** Autonomously orchestrates calls to Oracle SCM REST APIs to fetch operational attributes, extended attributes, and product costs.
-*   **Data Transformation:** Automatically translates internal database lookup codes (e.g., Boolean flags, Lot Control Codes) into human-readable business terms.
-*   **Dynamic UI Generation:** The agent's prompt engineering directs the LLM to output custom, styled HTML tables that dynamically highlight attribute differences across multiple items for a premium frontend experience.
-*   **Hallucination Prevention:** Strict prompt guardrails ensure the agent only outputs whitelisted attributes and never invents missing data.
-*   **Context Optimization:** Designed to extract and retain only vital identifiers (Item ID, Organization ID) to minimize token usage and context window bloat.
+*   **Model:** OCI GPT-5 Mini (Oracle Cloud Infrastructure)
+*   **Integration:** Oracle Fusion SCM REST APIs
+*   **Endpoints Used:** `itemOperationalAttributes`, `itemExtendedAttributes`, `itemsV2`
+*   **Format:** Single-Agent Declarative Workflow (JSON)
 
-## 🛠️ Technology Stack
+## Core Capabilities
 
-*   **AI Model:** OCI GPT-5 Mini (Oracle Cloud Infrastructure)
-*   **Integrations:** Oracle Fusion SCM REST APIs
-    *   `itemOperationalAttributes`
-    *   `itemExtendedAttributes`
-    *   `itemsV2` (Product Costs)
-*   **Architecture:** Single-Agent Workflow (Declarative JSON)
+*   **API Orchestration:** Executes sequential API calls to extract internal `ItemId` and `OrganizationId`, followed by deep dives into extended attributes and product costs.
+*   **Data Transformation:** Translates internal database lookup codes (e.g., boolean flags, Lot Control Codes) into human-readable business terms before presenting data.
+*   **Hallucination Guardrails:** Enforces strict prompt constraints, ensuring the model only evaluates whitelisted attributes and prevents interpolation of missing data.
+*   **Dynamic UI Generation:** Instructs the LLM to output custom HTML tables, applying specific inline CSS to highlight data discrepancies across compared items.
+*   **Context Optimization:** Discards raw JSON payloads immediately after extracting necessary fields to minimize token usage and prevent context window bloat.
 
-## 🏢 Enterprise SDLC & Deployment
+## Deployment Lifecycle
 
-This architecture follows a rigorous Software Development Life Cycle (SDLC) and has been successfully validated across multiple environments for **Verdesian Life Sciences**:
+This configuration was tested and deployed following a standard enterprise Software Development Life Cycle (SDLC):
 
-*   **DEV1 & DEV2 Instances:** Initial agent prompt tuning, REST API integration testing, and HTML UI rendering validation.
-*   **TEST Instance:** Quality assurance and User Acceptance Testing (UAT) with real-world enterprise product data to ensure absolute accuracy and strict adherence to anti-hallucination guardrails.
+*   **DEV1 & DEV2:** Agent prompt tuning, API integration testing, and HTML rendering validation.
+*   **TEST:** Quality assurance and User Acceptance Testing (UAT) using real-world enterprise product data.
 
-## 🧠 How It Works
+## Repository Contents
 
-1.  **Trigger:** The agent receives an item comparison request via a REST trigger.
-2.  **Sequential Execution:** It first queries the operational attributes to extract the internal `ItemId` and `OrganizationId`.
-3.  **Deep Dive:** Using the extracted IDs, it makes subsequent calls to retrieve extended attributes and cost parameters.
-4.  **Analysis & Formatting:** The LLM processes the payloads, comparing exact strings across items.
-5.  **Output:** It generates a robust HTML block featuring:
-    *   A summary of the comparison.
-    *   A meticulously styled table grouping attributes by category (Overview, Product Details, Manufacturing, etc.).
-    *   Highlighted rows where discrepancies exist between items.
-    *   Cross-module insights and business summaries.
-
-## 📁 Repository Structure
-
-*   `PRODUCT_COMPARATOR_V13.json`: The core export of the AI agent's workflow, containing the system prompts, tool definitions, API endpoints, and error handling configurations.
+*   `PRODUCT_COMPARATOR_V13.json`: The core JSON export containing the agent's system prompts, REST tool definitions, API endpoints, and error handling logic.
