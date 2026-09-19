@@ -1,31 +1,32 @@
-# Product Comparison Advisor (AI Agent)
+# Oracle Fusion Product Comparison Advisor
 
-This repository contains the declarative workflow configuration for an enterprise AI agent that automates product comparisons within Oracle Fusion. 
+## Executive Summary
+This repository contains the configuration and operational workflow for an enterprise-grade AI agent developed for **Verdesian Life Sciences**. The Product Comparison Advisor automates the extraction, transformation, and comparison of product data within Oracle Fusion, significantly accelerating workflows for Product Managers, Designers, and Quality Engineers.
 
-Developed and deployed for **Verdesian Life Sciences**, the agent integrates directly with Oracle Supply Chain Management (SCM) REST APIs to extract item attributes and generate dynamic comparison reports.
+## Business Value
+*   **Automated Intelligence:** Eliminates manual data aggregation by directly querying Oracle Supply Chain Management (SCM) environments.
+*   **Standardized Reporting:** Generates deterministic, dynamically highlighted HTML reports for immediate visual identification of product discrepancies.
+*   **Data Integrity:** Employs strict prompt guardrails to prevent data interpolation (hallucinations), ensuring business decisions are made on exact source-of-truth data.
 
-## Architecture & Tech Stack
+## Technical Architecture
+*   **Inference Engine:** OCI GPT-5 Mini (Oracle Cloud Infrastructure)
+*   **Integration Layer:** Oracle Fusion SCM REST APIs
+    *   `itemOperationalAttributes`
+    *   `itemExtendedAttributes`
+    *   `itemsV2` (Product Costs)
+*   **Workflow Format:** Single-Agent Declarative JSON
 
-*   **Model:** OCI GPT-5 Mini (Oracle Cloud Infrastructure)
-*   **Integration:** Oracle Fusion SCM REST APIs
-*   **Endpoints Used:** `itemOperationalAttributes`, `itemExtendedAttributes`, `itemsV2`
-*   **Format:** Single-Agent Declarative Workflow (JSON)
+## Core System Capabilities
+*   **API Orchestration:** Executes a sequenced data retrieval pipeline. It identifies the internal `ItemId` and `OrganizationId`, then triggers targeted queries for extended attributes and cost structures.
+*   **Data Normalization:** Translates internal database lookup codes (e.g., boolean flags, Lot Control Codes) into human-readable business taxonomy prior to data presentation.
+*   **Hallucination Prevention:** The agent is constrained by strict evaluation parameters. It is restricted to whitelisted attributes and explicitly programmed to fail gracefully rather than invent missing data.
+*   **Dynamic UI Generation:** Outputs structured HTML with embedded CSS, applying conditional formatting to highlight variations across compared products.
+*   **Context Optimization:** Implements aggressive context window management by discarding raw JSON payloads immediately after field extraction, optimizing token utilization and reducing latency.
 
-## Core Capabilities
-
-*   **API Orchestration:** Executes sequential API calls to extract internal `ItemId` and `OrganizationId`, followed by deep dives into extended attributes and product costs.
-*   **Data Transformation:** Translates internal database lookup codes (e.g., boolean flags, Lot Control Codes) into human-readable business terms before presenting data.
-*   **Hallucination Guardrails:** Enforces strict prompt constraints, ensuring the model only evaluates whitelisted attributes and prevents interpolation of missing data.
-*   **Dynamic UI Generation:** Instructs the LLM to output custom HTML tables, applying specific inline CSS to highlight data discrepancies across compared items.
-*   **Context Optimization:** Discards raw JSON payloads immediately after extracting necessary fields to minimize token usage and prevent context window bloat.
-
-## Deployment Lifecycle
-
-This configuration was tested and deployed following a standard enterprise Software Development Life Cycle (SDLC):
-
-*   **DEV1 & DEV2:** Agent prompt tuning, API integration testing, and HTML rendering validation.
-*   **TEST:** Quality assurance and User Acceptance Testing (UAT) using real-world enterprise product data.
+## Software Development Life Cycle (SDLC)
+The architecture adheres to a structured, multi-environment deployment strategy:
+*   **DEV1 & DEV2 Instances:** System integration testing (SIT), prompt tuning, and HTML rendering validation.
+*   **TEST Instance:** User Acceptance Testing (UAT) utilizing real-world enterprise product data to validate accuracy against strict quality assurance metrics.
 
 ## Repository Contents
-
-*   `PRODUCT_COMPARATOR_V13.json`: The core JSON export containing the agent's system prompts, REST tool definitions, API endpoints, and error handling logic.
+*   `PRODUCT_COMPARATOR_V13.json`: The production-ready configuration file containing the agent's behavioral prompts, REST endpoint definitions, and error handling protocols.
