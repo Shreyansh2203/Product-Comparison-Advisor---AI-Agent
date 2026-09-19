@@ -17,6 +17,7 @@
 - [Deployment & Setup](#-deployment--setup)
 - [Usage Example](#-usage-example)
 - [Software Development Life Cycle](#-software-development-life-cycle-sdlc)
+- [License](#-license)
 
 ---
 
@@ -83,6 +84,9 @@ The agent orchestrates the required API calls and outputs a structured HTML tabl
 The architecture adheres to a structured, multi-environment deployment strategy:
 *   **DEV1 & DEV2 Instances:** System integration testing (SIT), prompt tuning, and HTML rendering validation.
 *   **TEST Instance:** User Acceptance Testing (UAT) utilizing real-world enterprise product data from Verdesian Life Sciences to validate accuracy against strict quality assurance metrics.
+
+## ⚖️ License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 *Disclaimer: This repository contains configuration files and prompts. It does not contain proprietary Oracle source code or sensitive client data.*
