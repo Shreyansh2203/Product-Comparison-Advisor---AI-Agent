@@ -9,6 +9,7 @@ This repository contains the configuration and operational workflow for an enter
 *   **Data Integrity:** Employs strict prompt guardrails to prevent data interpolation (hallucinations), ensuring business decisions are made on exact source-of-truth data.
 
 ## Technical Architecture
+
 *   **Inference Engine:** OCI GPT-5 Mini (Oracle Cloud Infrastructure)
 *   **Integration Layer:** Oracle Fusion SCM REST APIs
     *   `itemOperationalAttributes`
@@ -16,12 +17,41 @@ This repository contains the configuration and operational workflow for an enter
     *   `itemsV2` (Product Costs)
 *   **Workflow Format:** Single-Agent Declarative JSON
 
+### System Data Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Agent as Fusion AI Agent
+    participant Oracle as Oracle SCM REST APIs
+    
+    User->>Agent: Request Item Comparison
+    Agent->>Oracle: Get_Operational_Attribute_Values (Extract ItemId, OrgId)
+    Oracle-->>Agent: Return Internal IDs
+    Agent->>Oracle: Get_Extended_Attribute_Values (Using IDs)
+    Oracle-->>Agent: Return Extended Data
+    Agent->>Oracle: getProductCosts (Using IDs)
+    Oracle-->>Agent: Return Cost Data
+    Agent->>Agent: Normalize Data & Apply Guardrails
+    Agent-->>User: Render Highlighted HTML Comparison Table
+```
+
 ## Core System Capabilities
 *   **API Orchestration:** Executes a sequenced data retrieval pipeline. It identifies the internal `ItemId` and `OrganizationId`, then triggers targeted queries for extended attributes and cost structures.
 *   **Data Normalization:** Translates internal database lookup codes (e.g., boolean flags, Lot Control Codes) into human-readable business taxonomy prior to data presentation.
 *   **Hallucination Prevention:** The agent is constrained by strict evaluation parameters. It is restricted to whitelisted attributes and explicitly programmed to fail gracefully rather than invent missing data.
 *   **Dynamic UI Generation:** Outputs structured HTML with embedded CSS, applying conditional formatting to highlight variations across compared products.
 *   **Context Optimization:** Implements aggressive context window management by discarding raw JSON payloads immediately after field extraction, optimizing token utilization and reducing latency.
+
+## Deployment & Setup
+
+This agent configuration is designed to be natively imported and orchestrated via **Oracle Fusion AI Agent Studio**.
+
+1. Access **Fusion AI Agent Studio** within your Oracle Cloud environment.
+2. Navigate to the agent configuration workspace and initialize an import.
+3. Upload the `PRODUCT_COMPARATOR_V13.json` file located in this repository.
+4. Verify that the runtime identity has adequate privileges to query the `/fscmRestApi/resources/11.13.18.05/` SCM endpoints.
+5. Publish and bind the agent to your target channel or UI.
 
 ## Software Development Life Cycle (SDLC)
 The architecture adheres to a structured, multi-environment deployment strategy:
