@@ -16,6 +16,10 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+*.pem
+*.key
+secrets/
+credentials.json
 
 # Logs
 logs
@@ -23,3 +27,8 @@ logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Python (validation scripts)
+__pycache__/
+*.py[cod]
+.venv/

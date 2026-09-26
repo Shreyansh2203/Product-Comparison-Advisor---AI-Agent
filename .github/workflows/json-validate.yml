@@ -6,15 +6,29 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
-        
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Check JSON syntax for Agent Configuration
         run: |
           echo "Validating PRODUCT_COMPARATOR_V13.json..."
-          jq empty PRODUCT_COMPARATOR_V13.json
-          echo "Validation successful!"
+          python -m json.tool PRODUCT_COMPARATOR_V13.json > /dev/null
+          echo "JSON syntax OK."
+
+      - name: Validate agent configuration contract
+        run: python scripts/validate_agent.py
+
+      - name: Run structural tests
+        run: python -m unittest discover -s tests -v
