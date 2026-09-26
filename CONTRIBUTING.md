@@ -21,4 +21,19 @@ If you have ideas for how to improve the agent (e.g., adding new Oracle SCM endp
 ## JSON Modification Guidelines
 *   **Do not alter the core anti-hallucination guardrails** without rigorous testing in a DEV/TEST environment.
 *   Ensure any new API endpoints added to the tool definitions follow the `11.13.18.05` (or newer) Oracle SCM REST API schema.
-*   Validate your JSON syntax before committing.
+*   Validate your JSON syntax before committing:
+
+    ```bash
+    python scripts/validate_agent.py
+    python -m unittest discover -s tests
+    ```
+
+    Both commands use only the Python standard library. `validate_agent.py` is what CI runs, and it enforces the
+    contract above: undefined tool references, a changed highlight colour, mixed REST API versions, missing
+    anti-hallucination / prompt-injection / tool-failure guardrails, committed credentials or customer names, and
+    README claims that no longer match the configuration will all fail the build.
+
+*   Update `README.md` and `CHANGELOG.md` in the same pull request whenever you change agent behaviour.
+*   Do not rename `PRODUCT_COMPARATOR_V13.json`. The file name is the agent's published code, and changing it is a
+  breaking change for anyone who has already imported the agent. Record content changes under a new CHANGELOG
+  version instead.

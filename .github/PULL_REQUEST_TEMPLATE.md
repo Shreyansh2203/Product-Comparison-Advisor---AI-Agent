@@ -8,6 +8,8 @@ Please include a summary of the modification made to the agent configuration.
 
 ## Checklist:
 - [ ] My JSON configuration is valid and passes the GitHub Actions linter.
+- [ ] `python scripts/validate_agent.py` and `python -m unittest discover -s tests` both pass locally.
 - [ ] I have tested these prompt changes in a DEV/TEST environment.
 - [ ] I have not removed or bypassed the core anti-hallucination guardrails.
-- [ ] I have updated the CHANGELOG if necessary.
+- [ ] I have not renamed `PRODUCT_COMPARATOR_V13.json`.
+- [ ] I have updated `README.md` and the CHANGELOG.
