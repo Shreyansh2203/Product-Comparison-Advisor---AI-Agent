@@ -324,6 +324,17 @@ class WarningTriageIsMeaningful(unittest.TestCase):
             ],
         )
 
+    def test_every_accepted_finding_is_named_in_the_readme(self):
+        # An accepted finding that the README stops mentioning is an undocumented
+        # gap, which is exactly what the accepted list exists to prevent.
+        for code in validate_agent.ACCEPTED_FINDINGS:
+            token = code.split("/")[-1]
+            self.assertIn(
+                token,
+                README,
+                "accepted finding %r is no longer named in the README" % code,
+            )
+
     def test_every_accepted_finding_carries_a_reason(self):
         for item in self._findings():
             if item.level == validate_agent.ACCEPTED:

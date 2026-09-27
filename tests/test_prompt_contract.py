@@ -826,3 +826,93 @@ class CostToolIsOnDemandOnly(unittest.TestCase):
         block = CONTRACT.rule("protocol", "PRODUCT COSTS")
         self.assertIn("only when the user asks about cost, price, or margin", block)
         self.assertIn("NEVER use it to mark another attribute as differing", block)
+
+
+class ReadmeIsGeneratedFromThePrompt(unittest.TestCase):
+    """The published output example cannot drift from the prompt's template."""
+
+    def _html_block(self, marker):
+        start = README.index(marker)
+        fence = README.index("```html", start)
+        body_start = README.index("\n", fence) + 1
+        body_end = README.index("```", body_start)
+        return README[body_start:body_end]
+
+    def test_the_worked_example_html_is_the_harness_output(self):
+        expected = fixtures.worked_example_html(CONTRACT, derived("worked-example"))
+        self.assertEqual(
+            self._html_block("## \U0001f3af Worked Example").strip(),
+            expected.strip(),
+            "the README's example output must be what the prompt's own template produces",
+        )
+
+    def test_the_worked_example_prose_matches_the_derived_counts(self):
+        self.assertIn(
+            fixtures.worked_example_summary(derived("worked-example")),
+            README,
+        )
+
+    def test_the_worked_example_uses_only_synthetic_items(self):
+        for token in (fixtures.ITEM_A, fixtures.ITEM_B, fixtures.ORG, "SYNTH-PKG-A"):
+            self.assertIn(token, README)
+        self.assertNotIn("10045", README)
+        self.assertNotIn("10046", README)
+
+    def test_the_worked_example_names_the_three_api_calls(self):
+        for path in (
+            "/fscmRestApi/resources/11.13.18.05/itemOperationalAttributes",
+            "/fscmRestApi/resources/11.13.18.05/itemExtendedAttributes",
+            "/fscmRestApi/resources/11.13.18.05/itemsV2",
+        ):
+            self.assertIn(path, README)
+
+    def test_the_worked_example_still_documents_show_only_differences(self):
+        self.assertIn("Show only the differences", README)
+
+
+class ReadmeLinksAndAnchorsResolve(unittest.TestCase):
+    """A reviewer navigates by these links, so a dead one costs real credibility."""
+
+    LINK_RE = re.compile(r"\[[^\]]+\]\(([^)\s]+)\)")
+
+    def anchors(self, text):
+        return set(slugify(h) for h in re.findall(r"^#{1,6}\s+(.*)$", text, re.MULTILINE))
+
+    def test_every_relative_link_resolves(self):
+        for target in self.LINK_RE.findall(README):
+            if target.startswith("#") or "://" in target or target.startswith("mailto:"):
+                continue
+            path, _, anchor = target.partition("#")
+            if not path:
+                continue
+            full = os.path.join(REPO_ROOT, path)
+            self.assertTrue(os.path.exists(full), "README links to %s which does not exist" % target)
+            if anchor and path.endswith(".md"):
+                with open(full, "r", encoding="utf-8") as handle:
+                    other = handle.read()
+                self.assertIn(anchor[1:], self.anchors(other), "anchor %r not found" % target)
+
+    def test_every_table_of_contents_anchor_exists(self):
+        section = README[README.index("## \U0001f4d6 Table of Contents") :]
+        section = section[: section.index("\n---")]
+        targets = [t for t in self.LINK_RE.findall(section) if t.startswith("#")]
+        self.assertTrue(targets, "the README should have a table of contents")
+        slugs = self.anchors(README)
+        for target in targets:
+            self.assertIn(target[1:], slugs, "table-of-contents anchor %r does not exist" % target)
+
+    def test_every_section_heading_is_in_the_table_of_contents(self):
+        # Every level-two section must be reachable from the table of contents,
+        # apart from the table of contents itself, which conventionally does not
+        # list itself.
+        section = README[README.index("## \U0001f4d6 Table of Contents") :]
+        section = section[: section.index("\n---")]
+        listed = set(t[1:] for t in self.LINK_RE.findall(section) if t.startswith("#"))
+        for heading in re.findall(r"^##\s+(.*)$", README, re.MULTILINE):
+            if "Table of Contents" in heading:
+                continue
+            self.assertIn(
+                slugify(heading),
+                listed,
+                "section %r is missing from the table of contents" % heading,
+            )
