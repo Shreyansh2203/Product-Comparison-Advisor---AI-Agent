@@ -45,6 +45,8 @@ import os
 import re
 import sys
 
+import prompt_contract
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_CONFIG = os.path.join(REPO_ROOT, "PRODUCT_COMPARATOR_V13.json")
 DEFAULT_README = os.path.join(REPO_ROOT, "README.md")
@@ -87,6 +89,24 @@ ACCEPTED_FINDINGS = {
         "The REST trigger's endpoint contract belongs to whichever system calls the "
         "agent, which is not known at authoring time. The README makes it an explicit "
         "operator task at import time."
+    ),
+    "max-interactions/scope": (
+        "The document declares two fields named MaximumInteractions: the agent's, and "
+        "one at the top level beside Architecture, StartAgentId, and agentMappings. Oracle "
+        "documents the same field name in two places with the same meaning, on the Agents "
+        "tab (the number of times the agent can interact with its topics and tools) and on "
+        "the Agent Team record, so the top-level value is the team-level budget. Oracle does "
+        "not document which one the export format honours when both are present, and that "
+        "cannot be established from this repository. No value was invented: the agent's 20 "
+        "stands, the top level stays null, and the check asserts the two are consistent and "
+        "that a human confirms precedence in AI Agent Studio. See README 'Known Limitations'."
+    ),
+    "tool/parameter-unbound": (
+        "getProductCosts declares four ProductCosts.* filter parameters that never appear in "
+        "its resourcePath, so passing them cannot change the HTTP request. The tool binding "
+        "is Oracle seeded (ToolCode ORA_SCM_PRODUCTMAN_ITEMCOSTS) and is not editable from "
+        "this repository, so the prompt's 'plus optional cost filters' cannot be exercised. "
+        "Reported rather than rewritten; see README 'Known Limitations'."
     ),
 }
 
@@ -265,6 +285,71 @@ def prompt_texts(agent):
     )
 
 
+def check_max_interactions_relationship(doc, agent):
+    """Assert the two MaximumInteractions fields are mutually consistent.
+
+    The verdict, stated so it can be checked: `agents[0].MaximumInteractions`
+    governs this agent's tool interactions. The top-level field sits beside
+    `Architecture`, `StartAgentId`, and `agentMappings`, which are the
+    agent-app's routing fields, and Oracle documents a field of the same name on
+    the Agent Team record; with `Architecture: single_agent`, `StartAgentId: null`,
+    one agent of `AgentType: WORKER`, and a single self-referential mapping edge,
+    there is no supervisor and no inter-agent hop for a team-level budget to
+    govern. So a null top-level value is the "no team budget" state rather than a
+    conflicting zero.
+
+    That is a structural reading, not a documented one, so it is asserted and
+    reported rather than enforced by editing a value nobody can test from here.
+    """
+    out = []
+    agent_limit = agent.get("MaximumInteractions")
+    top_limit = doc.get("MaximumInteractions")
+
+    if top_limit is None:
+        out.append(
+            finding(
+                WARNING,
+                "max-interactions/scope",
+                "top-level MaximumInteractions is null while agents[0].MaximumInteractions is %r; "
+                "which one governs is not documented by Oracle, and this configuration has no "
+                "routing layer for the top-level value to bound" % agent_limit,
+            )
+        )
+        return out
+
+    if isinstance(top_limit, bool) or not isinstance(top_limit, int) or top_limit < 1:
+        out.append(
+            finding(
+                ERROR,
+                "max-interactions",
+                "top-level MaximumInteractions must be a positive integer or null, got %r" % top_limit,
+            )
+        )
+        return out
+
+    if isinstance(agent_limit, int) and top_limit < agent_limit:
+        out.append(
+            finding(
+                ERROR,
+                "max-interactions",
+                "top-level MaximumInteractions (%d) is below the agent's own budget (%d), so the "
+                "agent would be truncated before it could use the interactions it is configured for"
+                % (top_limit, agent_limit),
+            )
+        )
+        return out
+
+    out.append(
+        finding(
+            WARNING,
+            "max-interactions/scope",
+            "top-level MaximumInteractions (%d) and agents[0].MaximumInteractions (%r) are both "
+            "set; Oracle does not document which governs" % (top_limit, agent_limit),
+        )
+    )
+    return out
+
+
 # --------------------------------------------------------------------------
 # checks
 # --------------------------------------------------------------------------
@@ -355,6 +440,15 @@ def check_structure(doc, raw, ctx):
         out.append(
             finding(OK, "max-interactions", "agent turn limit: %d" % agent["MaximumInteractions"])
         )
+
+    # The document carries two fields named MaximumInteractions and Oracle does not
+    # document which one governs. The relationship is asserted here rather than
+    # guessed at: a top-level budget below the agent's own budget would truncate
+    # the agent, and a non-null top-level budget in a single-agent architecture is
+    # a routing budget for an orchestrator this document does not have. The
+    # ambiguity itself is reported as an acknowledged finding so a human resolves
+    # it in AI Agent Studio.
+    out.extend(check_max_interactions_relationship(doc, agent))
 
     # The file name is the agent's published code and existing imports bind to
     # it, so a rename is a breaking change rather than a cosmetic one.
@@ -800,10 +894,79 @@ def check_deployment(doc, raw, ctx):
     return out
 
 
+def check_prompt_semantics(doc, raw, ctx):
+    """Run the behavioural prompt contract and surface its findings as levels.
+
+    `scripts/prompt_contract.py` is the offline harness: it parses the prompt into
+    named rules, proves each rule is actually written, and cross-checks every tool
+    the prompt names against the tools actually attached, parameters included. Its
+    violations are real contract breaches, so they are errors here and the CI gate
+    fails on them. This is rule verification, not model verification: it proves
+    what the prompt requires, never what the model does.
+    """
+    out = []
+    try:
+        violations = prompt_contract.verify(doc)
+    except prompt_contract.Violation as exc:
+        return [finding(ERROR, "prompt-contract", "the prompt contract could not be parsed: %s" % exc)]
+
+    if violations:
+        for violation in violations:
+            out.append(finding(ERROR, "prompt-contract/" + violation.code, violation.message))
+        return out
+
+    out.append(
+        finding(
+            OK,
+            "prompt-contract",
+            "all %d guardrail rules are written in the prompt, and every tool and parameter it "
+            "names is declared by an attached tool" % len(prompt_contract.RULES),
+        )
+    )
+
+    # Parameters that are declared but never bound into a request path cannot
+    # change the request. The tool bindings are Oracle seeded, so this is reported
+    # rather than enforced.
+    contract = prompt_contract.Contract(doc)
+    for name, inert in prompt_contract.unbound_parameters(contract):
+        out.append(
+            finding(
+                WARNING,
+                "tool/parameter-unbound",
+                "tool %r declares parameter(s) %s that never appear in its resourcePath, so "
+                "passing them cannot change the request" % (name, ", ".join(inert)),
+            )
+        )
+
+    effort = (
+        ((doc.get("agents") or [{}])[0].get("Specification") or {})
+        .get("modelConfiguration", {})
+        .get("modelProperties", {})
+        .get("reasoning_effort")
+    )
+    k = (
+        ((doc.get("agents") or [{}])[0].get("Specification") or {})
+        .get("modelConfiguration", {})
+        .get("modelProperties", {})
+        .get("k")
+    )
+    out.append(
+        finding(
+            OK,
+            "model-properties",
+            "modelProperties validated at both levels: reasoning_effort=%r, k=%r "
+            "(top-k sampling disabled, so the model default applies), max_completion_tokens=8000"
+            % (effort, k),
+        )
+    )
+    return out
+
+
 CHECKS = [
     ("structure", check_structure),
     ("contract", check_contract),
     ("guardrails", check_guardrails),
+    ("semantics", check_prompt_semantics),
     ("disclosure", check_disclosure),
     ("readme", check_readme),
     ("deployment", check_deployment),

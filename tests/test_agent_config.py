@@ -307,14 +307,21 @@ class WarningTriageIsMeaningful(unittest.TestCase):
             "every finding on the shipped configuration must be OK or explicitly accepted",
         )
 
-    def test_accepted_findings_are_exactly_the_documented_four(self):
+    def test_accepted_findings_are_exactly_the_documented_six(self):
         accepted = sorted(
             f.code for f in self._findings() if f.level == validate_agent.ACCEPTED
         )
         self.assertEqual(accepted, sorted(validate_agent.ACCEPTED_FINDINGS))
         self.assertEqual(
             accepted,
-            ["model-code", "partner-metadata", "pipeline/error-handler", "trigger/rest-empty"],
+            [
+                "max-interactions/scope",
+                "model-code",
+                "partner-metadata",
+                "pipeline/error-handler",
+                "tool/parameter-unbound",
+                "trigger/rest-empty",
+            ],
         )
 
     def test_every_accepted_finding_carries_a_reason(self):
