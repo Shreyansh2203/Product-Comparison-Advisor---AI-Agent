@@ -16,6 +16,7 @@
 - [Prerequisites](#-prerequisites)
 - [Deployment & Setup](#-deployment--setup)
 - [Validation](#-validation)
+- [Known Limitations](#-known-limitations)
 - [Usage Example](#-usage-example)
 - [Software Development Life Cycle](#-software-development-life-cycle-sdlc)
 - [License](#-license)
@@ -87,11 +88,19 @@ There is no build step and no runtime dependency.
 4. Bind credentials for the three SCM REST endpoints listed under Prerequisites. The configuration references
    them only by relative path and tool name; it contains no host, tenancy, account, or secret of any kind, so the
    base URL, the authentication, and the account are supplied by the operator at bind time.
-5. Supply the `REST` trigger inputs. The shipped `triggers` block is an empty `REST` trigger, so the endpoint
-   contract that calls the agent must be chosen and bound during import.
-6. Optionally replace the empty `EMAIL` error handler in `Specification.dataPipeline.errorHandlers` with a real
-   recipient. As shipped it is a no-op: a pipeline error is swallowed rather than reported.
+5. Supply the `REST` trigger inputs in `Specification.triggers`. The shipped `triggers` block is an empty `REST`
+   trigger, so the endpoint contract that calls the agent must be chosen and bound during import. **Required**: an
+   unconfigured trigger has no way for a caller to reach the agent.
+6. Populate the `EMAIL` error handler in `Specification.dataPipeline.errorHandlers`. As shipped it has an empty
+   recipient, subject, and body, so it is a no-op and a pipeline error is swallowed rather than reported.
+   **Required**: without a real address, failures are silent. Set `toList` (and optionally `ccList`, `subject`,
+   and `body`) to an address your team monitors.
 7. Publish and bind the agent to your target channel or UI interface.
+
+Steps 5 and 6 cannot be completed in this repository: the endpoint contract belongs to whichever system calls the
+agent, and the error recipient is a tenant fact. They are asserted by the validator as acknowledged findings rather
+than as errors, and the validator fails if this README ever stops documenting them. See
+[Known Limitations](#-known-limitations).
 
 Because the REST tools use relative paths, the `Region` in scope is the **OCI home region** where Generative AI
 is enabled. The SCM data itself is served by the Fusion host, which is not an OCI regional endpoint.
@@ -100,13 +109,45 @@ is enabled. The SCM data itself is served by the Fusion host, which is not an OC
 The configuration is checked in CI, and the same checks run locally with the Python standard library only:
 
 ```bash
-python scripts/validate_agent.py            # structure, contract, guardrails, disclosure, README cross-check
-python -m unittest discover -s tests        # structural tests plus negative tests for the validator
+python scripts/validate_agent.py --strict      # the gate CI runs: any unsigned-off finding fails
+python scripts/validate_agent.py --verbose     # also list the passing OK checks
+python scripts/validate_agent.py --explain     # list the accepted findings and their reasons
+python -m unittest discover -s tests           # structural tests plus negative tests for the validator
 ```
+
+Findings carry one of four levels, and the distinction is the point:
+
+| Level | Meaning |
+| --- | --- |
+| `ERROR` | The configuration breaks its own contract. Always fails the build. |
+| `WARN` | Real and unsigned-off. Fails the build under `--strict`, which is what CI uses. |
+| `ACCEPT` | Real, but deliberately accepted; the reason is recorded in `ACCEPTED_FINDINGS` in the validator and printed inline. |
+| `OK` | The check passed. Hidden unless `--verbose`. |
+
+The accepted list is an explicit, reviewed decision rather than a suppression switch: an entry that stops firing
+becomes a `WARN`, so it cannot quietly rot into a blanket.
 
 The validator fails the build on an undefined tool reference, a changed highlight colour, a drifted REST API
 version, a missing anti-hallucination / prompt-injection / tool-failure guardrail, a committed credential or
-customer name, or a README claim that no longer matches the configuration.
+customer name, a configuration file name that no longer matches the agent code, or a README claim that no longer
+matches the configuration.
+
+## ⚠️ Known Limitations
+These are the four findings the validator reports as `ACCEPT` rather than as warnings. All four are documented in
+`ACCEPTED_FINDINGS` in [`scripts/validate_agent.py`](./scripts/validate_agent.py); nothing is being hidden.
+
+*   **`modelConfiguration.code` does not name the effective model.** The `code` is
+    `ORA_MODEL_CONFIG_PREMIUM_OPEN_AI_GPT_4_1_MINI` while the agent runs on `OCI_GPT_5_MINI`. The code is assigned
+    by Oracle at export and is not what selects the model — `model`, `modelName`, and `provider` are — so editing
+    an Oracle-assigned code risks breaking the AI Agent Studio import. Left exactly as shipped.
+*   **`Specification.dataPipeline.errorHandlers` is a no-op as shipped.** The `EMAIL` handler has empty
+    `toList`, `ccList`, `subject`, and `body`, so pipeline errors are discarded. A placeholder address would be
+    worse than an empty one; set it at import (Deployment step 6).
+*   **`Specification.triggers` is an empty `REST` trigger.** The calling endpoint contract is chosen by whoever
+    integrates the agent, at import (Deployment step 5).
+*   **`partnerMetadata.Name` is the opaque value `gvhb`.** Its origin is not recorded anywhere in this repository.
+    It is left as shipped because it may be meaningful to Oracle, but **a human should confirm it is not someone's
+    initials or a customer identifier** before publishing.
 
 ## 💡 Usage Example
 Once deployed, users can interact with the agent natively. 
