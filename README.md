@@ -21,6 +21,7 @@ Everything a reviewer needs in order to judge this agent is in this file: the gu
 - [Validation](#-validation)
 - [Known Limitations](#-known-limitations)
 - [Contributing](#-contributing)
+- [Portfolio](#-portfolio)
 - [License](#-license)
 
 ---
@@ -410,6 +411,20 @@ Beyond those, and stated plainly:
 ## 🤝 Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to edit the configuration safely, the commands CI runs, and the rules that must not be broken. The short version: the JSON must stay parseable and byte-formatting-stable, the filename must never change, and the gate plus the tests must pass before you push.
+
+## 🌐 Portfolio
+
+Other repositories by the same author. Each is a separate project with its own scope; no claims are made here beyond what each project
+documents for itself.
+
+| Repository | What it is |
+| :--- | :--- |
+| [Shreyansh2203/Merge-TIFF](https://github.com/Shreyansh2203/Merge-TIFF) | Web tool that merges multiple TIFF images into a single multi-page TIFF, reassembled server-side with Pillow so the page never sees your files |
+| [Shreyansh2203/oracle-bip-reconciler](https://github.com/Shreyansh2203/oracle-bip-reconciler) | Reconciliation service that matches an OCR-read remittance advice row against a customer's real invoice and receipt history in Oracle Fusion ERP Cloud BI Publisher, or marks it `UNMATCHED` |
+| [Shreyansh2203/OTL-Voice](https://github.com/Shreyansh2203/OTL-Voice) | OTL Timesheet Assistant: voice-driven timesheet capture with a FastAPI service and a React frontend |
+| [Shreyansh2203/Scraping-Bot](https://github.com/Shreyansh2203/Scraping-Bot) | Telegram bot that downloads the media behind an Instagram or Twitter/X link |
+
+This repository is `Shreyansh2203/Product-Comparison-Advisor---AI-Agent`. The remote carries the triple hyphen; renaming it is a GitHub Settings action that breaks existing clone URLs, so the current name is linked as-is.
 
 ## ⚖️ License
 

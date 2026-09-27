@@ -45,7 +45,8 @@ Prompt hardening and verification tooling. `PRODUCT_COMPARATOR_V13.json` keeps i
   compared byte for byte, so the documentation cannot advertise an output shape the prompt does not specify.
 - **README: "How to verify this before production".** A checklist for an Oracle engineer: what to run in a
   DEV/TEST instance, what to look for, and the five prompt points most likely to need tuning, ranked.
-- **README: a data-flow mermaid diagram** restored to the architecture section.
+- **README: a Portfolio section** linking the author's other four repositories, and a data-flow mermaid diagram
+  restored to the architecture section.
 - **Tests: every relative link resolves and every table-of-contents anchor exists**, and every accepted finding is
   named in the README.
 - **CI: the gate is now proved to be a gate.** A step injects a regression the validator must catch, on a
