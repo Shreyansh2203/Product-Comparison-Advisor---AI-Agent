@@ -11,7 +11,7 @@ version, not to match a local folder name. The file name is the agent's publishe
 code: anyone who has already imported this agent, or who follows a link to it, is
 referring to that exact path. Renaming it is a breaking change, and the version in
 the name is bumped by Oracle on export rather than by us. Record content changes
-in [`CHANGELOG.md`](./CHANGELOG.md) under the existing `1.1.0` heading instead.
+in [`CHANGELOG.md`](./CHANGELOG.md) under the `Unreleased` heading instead.
 
 ## Editing the configuration safely
 
@@ -26,12 +26,19 @@ deployment.
    python -c "import json; json.load(open('PRODUCT_COMPARATOR_V13.json', encoding='utf-8'))"
    ```
 
-2. **Keep the formatting stable.** The file uses four-space indentation and is
-   already re-serialised by Oracle on export. Do not reflow it, do not re-indent it,
-   and do not add comments. A whole-file reformat makes the next diff unreadable and
-   buries the behavioural change you actually made. If you edit the JSON
-   programmatically, write it back with `json.dump(..., indent=4, ensure_ascii=False)`
-   and confirm the diff shows only your lines.
+2. **Keep the formatting stable.** The file uses **two-space** indentation and CRLF
+   line endings, and is already re-serialised by Oracle on export. Do not reflow
+   it, do not re-indent it, and do not add comments. A whole-file reformat makes
+   the next diff unreadable and buries the behavioural change you actually made.
+   The two-space form is load-bearing, not cosmetic:
+   `tests/test_agent_config.py::test_indentation_and_line_endings_are_preserved`
+   asserts the exact indented `"WorkflowCode": "PRODUCT_COMPARATOR_V13",` line
+   and fails on any tab, so a four-space reformat breaks the build. If you edit
+   the JSON programmatically, write it back with
+   `json.dump(doc, handle, indent=2, ensure_ascii=False)` and confirm the diff
+   shows only your lines. The file round-trips byte-for-byte through
+   `json.dumps(doc, indent=2, ensure_ascii=False)` with CRLF endings; if yours
+   does not, you have changed something you did not mean to.
 
 3. **No secrets, ever.** No tenant URLs, no credentials, no tokens, no customer
    names, no real item data. The gate enforces this, but the point is that a
@@ -108,6 +115,31 @@ prompt says what it must say and that those statements imply the pinned behaviou
 It cannot prove the model obeys them; only a run in a tenant can. Please do not
 describe it as a behavioural test of the agent.
 
+## The changelog
+
+[`CHANGELOG.md`](./CHANGELOG.md) follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+which has one rule that is easy to get wrong: **a released version's entry is
+history, not a scratchpad.** `1.0.0` and `1.1.0` are dated and shipped. Appending
+to either one rewrites the record of what a given tag actually contained, so the
+changelog stops being evidence of anything.
+
+So:
+
+1. Put your entry under the existing `## [Unreleased]` heading at the top. That
+   section is where everything accumulates until a release happens.
+2. Use the `### Added` / `### Changed` / `### Fixed` / `### Removed` subsection
+   that matches the change, and create a new subsection rather than folding
+   unrelated work into an existing bullet.
+3. Leave the date off. A version heading only gets a date when the release is
+   cut; adding one to `Unreleased` fabricates a release.
+4. Cutting a release is a deliberate act: rename `## [Unreleased]` to
+   `## [X.Y.Z] - YYYY-MM-DD`, add the date, and add the matching link reference at
+   the bottom of the file. Do not do this as part of an ordinary pull request.
+
+A behaviour change to the agent always gets a changelog entry. A documentation or
+CI-only change gets one too if it changes what a contributor or a reviewer has to
+do.
+
 ## Submitting a pull request
 
 1. Fork the repository and branch from `main`.
@@ -116,7 +148,7 @@ describe it as a behavioural test of the agent.
    pull request whenever you change agent behaviour or the contract. The README's
    worked example is generated from the prompt's own template and compared byte for
    byte, so a prompt change that alters the output shape will fail the tests until
-   the example is regenerated.
+   the example is regenerated. The changelog entry goes under `## [Unreleased]`.
 4. Run the three commands above.
 5. Open the pull request, describing what changed in the prompt and why, and flagging
    anything that needs a tenant to confirm.

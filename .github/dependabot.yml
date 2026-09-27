@@ -1,0 +1,20 @@
+version: 2
+
+updates:
+  # This repository has no language dependencies: the six Python files are
+  # stdlib-only and there is no manifest for Dependabot to read. So
+  # `github-actions` is the only ecosystem that has anything to update here, and
+  # adding an npm, pip, or docker entry would only produce empty PR sets.
+  #
+  # This entry is not optional either. Both workflows pin every action to a full
+  # 40-character commit SHA, which means nothing moves them forward on its own --
+  # the pins rot silently. This is what moves them: Dependabot reads the release
+  # tag from the trailing "# vX.Y.Z" comment on each `uses:` line and opens a PR
+  # that swaps the SHA and the comment together, which the CI workflow then proves
+  # by running the gate against the new pins.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"

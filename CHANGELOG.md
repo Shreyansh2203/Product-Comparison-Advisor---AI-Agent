@@ -5,6 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`.github/dependabot.yml`.** Both workflows pin every action to a full
+  40-character commit SHA, so nothing moved the pins forward and they rotted
+  silently. Dependabot reads the release tag from the trailing `# vX.Y.Z`
+  comment and opens a PR that swaps the SHA and the comment together.
+  `github-actions` is the only ecosystem entry: this repository has no manifest
+  for anything else to read, so an npm/pip entry would only open empty PRs.
+- **`.github/workflows/codeql.yml`.** CodeQL for `python` and `actions`, on a
+  weekly schedule. The `actions` scan is the one that earns its keep in a
+  repository like this one — the realistic supply-chain mistakes here are a
+  mutable tag, a missing permission, or an unquoted interpolation in a workflow,
+  not a dependency CVE. Same SHA-pinning policy, plus an explicit `permissions`
+  block and a `concurrency` block so a superseded scan is cancelled rather than
+  left to burn minutes.
+- **A job-level `timeout-minutes: 10` on both workflows.** Previously a hung
+  step could sit until GitHub's six-hour default. This bounds a hang, not a slow
+  run; the full test suite finishes in well under a second.
+
+### Changed
+- **CI now runs Python 3.13 instead of 3.11.** 3.11 is a security-only line as of
+  2026-09; 3.13 is a current bugfix line. The harness is stdlib-only and the
+  suite was re-run green on 3.13, including the `^Ran [1-9][0-9]* tests? in `
+  non-vacuity check the workflow greps for, which still matches.
+- **CI action pins moved forward: `actions/checkout` v4.4.0 -> v7.0.1 and
+  `actions/setup-python` v5.6.0 -> v7.0.0**, each still pinned to a full
+  40-character commit SHA with the tag in a trailing comment. Both SHAs were
+  re-resolved with `git ls-remote --tags` and confirmed to be commit objects
+  rather than tag objects. The two majors were checked against their release
+  notes before adopting them: checkout v7's only behavioural change is blocking
+  fork checkouts on `pull_request_target` and `workflow_run`, neither of which
+  this workflow triggers on, and setup-python v7's is the removal of the
+  `pip-install` input, which this workflow does not use. The SHA-pinning comment
+  in the workflow was extended to document the peeled-`^{}` distinction for
+  annotated tags and to record that Dependabot now keeps the pins current.
+
+### Fixed
+- **`CONTRIBUTING.md` described the wrong indentation, and the contradiction was
+  load-bearing.** It said the configuration uses four-space indentation and told
+  contributors to write it back with `json.dump(..., indent=4, ...)`, while the
+  shipped file is two-space and CRLF and `test_agent_config.py` asserts the exact
+  two-space `"WorkflowCode": "PRODUCT_COMPARATOR_V13",` line and rejects tabs. A
+  contributor who followed the instructions exactly would have re-indented the
+  whole file and broken the build. The file now documents two-space
+  indentation, the correct `indent=2, ensure_ascii=False` write-back recipe, and
+  the byte-for-byte round-trip property — and the JSON itself was deliberately
+  **not** reformatted, because the two-space form is what the test pins.
+- **`CONTRIBUTING.md` told contributors to record work under the existing `1.1.0`
+  heading.** `1.1.0` is dated and released, so appending to it rewrote the record
+  of what that version contained — the opposite of what Keep a Changelog is for.
+  Contributions now go under `## [Unreleased]`, with a new *The changelog*
+  section spelling out the accumulate-then-date-at-release workflow.
+
+### Not changed, deliberately
+- **`PRODUCT_COMPARATOR_V13.json` is byte-for-byte identical.** No key added,
+  removed, renamed, or reordered; no prompt or tool-description text touched. The
+  file name, the agent code, and the 2-space / CRLF formatting are all unchanged,
+  and it still round-trips byte-for-byte through
+  `json.dumps(doc, indent=2, ensure_ascii=False)`.
+- **The test count is still 200.** Nothing in this revision changed a test, so the
+  count above is still accurate and no test was added to make a number move.
+- **No coverage measurement was added.** Reporting line coverage needs
+  `coverage` or `pytest-cov`, and this repository's rule is that it has no
+  third-party dependencies and no package manifest. A coverage number is not
+  worth breaking the deployment model for. The guard that actually matters — the
+  `^Ran [1-9][0-9]* tests? in ` grep, which fails the build if a discovery
+  mistake makes the suite exit 0 without running anything — is already in place
+  and is a stronger check of what a zero-dependency repo needs than a percentage
+  would be.
+
 ## [1.1.0] - 2026-09-27
 Prompt hardening and verification tooling. `PRODUCT_COMPARATOR_V13.json` keeps its name and its agent code
 (`PRODUCT_COMPARATOR_V13`); this is a content revision, not a re-versioning, so existing imports are unaffected.
@@ -246,3 +317,19 @@ All six are reported by the validator as acknowledged `ACCEPT` findings with a w
 - Complete Community Health Profile (Contributing, Code of Conduct, Security Policy, Issue Templates, PR Template).
 - Automated CI pipeline (GitHub Actions) for JSON syntax validation.
 - CODEOWNERS file for PR review enforcement.
+
+<!--
+Link references.
+
+Keep a Changelog closes each version heading with a compare URL, e.g.
+
+    [Unreleased]: https://github.com/OWNER/REPO/compare/v1.1.0...HEAD
+    [1.1.0]: https://github.com/OWNER/REPO/compare/v1.0.0...v1.1.0
+    [1.0.0]: https://github.com/OWNER/REPO/releases/tag/v1.0.0
+
+There are deliberately no such definitions yet: this repository has no git tags
+at all, so `1.0.0` and `1.1.0` are dated headings with no corresponding tag and
+`.../releases/tag/v1.1.0` would be a 404. Writing them anyway would put a dead
+link in the file that is supposed to be the record of what shipped. Cut the first
+real tag and add the block at the same time.
+-->
