@@ -16,9 +16,9 @@ It performs five families of checks:
   * structure    - the document has the keys AI Agent Studio expects and is self-consistent
   * contract     - the prompt only calls tools that are actually defined, the model
                    and REST endpoints are present, and the documented output
-                   contract (HTML table, #ffe6e6 highlight) is intact
-  * guardrails   - the anti-hallucination, prompt-injection, and tool-failure
-                   guardrails are present in the agent prompt text
+                   contract (HTML table, #ffe6e6 highlight, HTML escaping) is intact
+  * guardrails   - each named guardrail is still written in its own block, with
+                   every mandatory clause, and nothing that permits the opposite
   * disclosure   - no credentials, tenancy identifiers, or customer data are
                    committed, and the README still matches the configuration
   * deployment   - the work an operator must finish at import time is still
@@ -142,40 +142,68 @@ README_ENDPOINT_RE = re.compile(r"/fscmRestApi/resources/([0-9.]+)/([A-Za-z0-9_]
 
 HIGHLIGHT_COLOR = "#ffe6e6"
 
-# Guardrail categories. Each entry is (code, label, any-of keyword groups).
-# A group is satisfied when every alternative in it appears (case-insensitively).
-GUARDRAIL_CATEGORIES = [
+# Guardrail categories, each backed by a named rule in `prompt_contract`.
+#
+# A category is satisfied only when every clause of its rule is written in the
+# rule's own block, so a guardrail whose heading survives but whose prohibition
+# was edited away is reported. The previous version of this check was a keyword
+# search over the concatenation of both prompts, which is weaker than the harness
+# it was advertising: it was satisfied by a keyword appearing anywhere, including
+# inside a rule that no longer prohibits anything. Delegating to the same rule
+# objects the harness uses keeps the two surfaces from disagreeing about which
+# guardrails are in force.
+GUARDRAIL_CATEGORY_RULES = (
     (
         "no-fabrication",
         "explicitly forbids inventing or inferring values",
-        [["no fabrication"], ["must be copied"], ["does not exist for you"]],
+        "anti-fabrication-forbids-inference",
     ),
     (
         "unknown-is-not-a-difference",
         "states that missing/null data is not a difference",
-        [["unknown is not a difference"]],
+        "differencing-requires-both-sides-known",
     ),
     (
         "tool-failure-handling",
         "states that a failed tool call is unknown data, not a difference",
-        [["tool failure"], ["not a difference"]],
+        "tool-failure-is-not-a-difference",
     ),
     (
         "insufficient-data",
         "refuses to compare when fewer than two items have data",
-        [["too few valid items"], ["fewer than two"]],
+        "insufficient-items-aborts-the-comparison",
     ),
     (
         "prompt-injection",
         "treats API-returned values as data, never as instructions",
-        [["prompt injection"], ["untrusted"], ["not instructions"]],
+        "injection-treated-as-literal-data",
     ),
     (
         "boolean-translation",
         "keeps the documented Yes/No boolean translation contract",
-        [["boolean values"], ["yes", "no"]],
+        "raw-booleans-never-rendered",
     ),
-]
+    (
+        "internal-code-translation",
+        "keeps the documented display meaning for internal codes and refuses to show one",
+        "internal-codes-never-rendered",
+    ),
+    (
+        "html-escaping",
+        "requires every value to be HTML-escaped before it reaches the document",
+        "values-are-html-escaped",
+    ),
+    (
+        "input-validation",
+        "requires a tool argument to match its pattern before the call is made",
+        "tool-inputs-are-pattern-constrained",
+    ),
+    (
+        "no-unrequested-lookups",
+        "forbids a tool call for an item the user did not name",
+        "no-unrequested-tool-calls",
+    ),
+)
 
 SECRET_VALUE_PATTERNS = [
     ("tenancy OCID", re.compile(r"ocid1\.[a-z0-9]+\.[a-z0-9-]*ocid1")),
@@ -645,23 +673,33 @@ def check_contract(doc, raw, ctx):
 
 
 def check_guardrails(doc, raw, ctx):
+    """Each guardrail is in force, clause by clause, in the block that owns it.
+
+    Clause-scoped, and shared with the harness: every category names a rule in
+    `prompt_contract.RULES`, and the category is satisfied only when each of that
+    rule's mandatory clauses is still written. A heading that survives with its
+    prohibition deleted, or with a clause added that permits the opposite, is
+    reported.
+    """
     out = []
     agent = get_agent(doc)
     if agent is None:
         return out
-    prompt = (agent.get("Prompt") or "").lower()
-    summarization = ((agent.get("Specification") or {}).get("summarizationPrompt") or "").lower()
-    combined = prompt + "\n" + summarization
+    try:
+        contract = prompt_contract.Contract(doc)
+    except prompt_contract.Violation as exc:
+        return [finding(ERROR, "guardrail/prompt-parse", "the prompt could not be parsed: %s" % exc)]
 
-    for code, label, groups in GUARDRAIL_CATEGORIES:
-        missing = [g for g in groups if not any(alt in combined for alt in g)]
+    for code, label, rule_id in GUARDRAIL_CATEGORY_RULES:
+        rule = prompt_contract.RULES_BY_ID[rule_id]
+        missing = rule.missing_clauses(contract)
         if missing:
             out.append(
                 finding(
                     ERROR,
                     "guardrail/" + code,
-                    "missing prompt guardrail: %s (no match for %s)"
-                    % (label, " / ".join(repr(m) for m in missing)),
+                    "missing prompt guardrail: %s (%s)"
+                    % (label, "; ".join("no %s" % clause for clause in missing)),
                 )
             )
         else:
@@ -669,6 +707,7 @@ def check_guardrails(doc, raw, ctx):
 
     # The system prompt (not just the summarizer) must forbid invention, so the
     # prohibition is in force while the agent is still choosing field values.
+    prompt = (agent.get("Prompt") or "").lower()
     if "never invent" not in prompt and "no fabrication" not in prompt:
         out.append(
             finding(
@@ -903,6 +942,12 @@ def check_prompt_semantics(doc, raw, ctx):
     violations are real contract breaches, so they are errors here and the CI gate
     fails on them. This is rule verification, not model verification: it proves
     what the prompt requires, never what the model does.
+
+    Every check in this function runs on every call. Returning early after the
+    first batch of contract violations used to skip the checks below, and because
+    `classify` then saw an acknowledged finding that had not fired, it reported
+    that finding as stale instead of reporting the violation the reader was
+    actually sent to look at. A failing run now names every problem it found.
     """
     out = []
     try:
@@ -910,19 +955,18 @@ def check_prompt_semantics(doc, raw, ctx):
     except prompt_contract.Violation as exc:
         return [finding(ERROR, "prompt-contract", "the prompt contract could not be parsed: %s" % exc)]
 
-    if violations:
-        for violation in violations:
-            out.append(finding(ERROR, "prompt-contract/" + violation.code, violation.message))
-        return out
+    for violation in violations:
+        out.append(finding(ERROR, "prompt-contract/" + violation.code, violation.message))
 
-    out.append(
-        finding(
-            OK,
-            "prompt-contract",
-            "all %d guardrail rules are written in the prompt, and every tool and parameter it "
-            "names is declared by an attached tool" % len(prompt_contract.RULES),
+    if not violations:
+        out.append(
+            finding(
+                OK,
+                "prompt-contract",
+                "all %d guardrail rules are written in the prompt, and every tool and parameter it "
+                "names is declared by an attached tool" % len(prompt_contract.RULES),
+            )
         )
-    )
 
     # Parameters that are declared but never bound into a request path cannot
     # change the request. The tool bindings are Oracle seeded, so this is reported
@@ -935,6 +979,21 @@ def check_prompt_semantics(doc, raw, ctx):
                 "tool/parameter-unbound",
                 "tool %r declares parameter(s) %s that never appear in its resourcePath, so "
                 "passing them cannot change the request" % (name, ", ".join(inert)),
+            )
+        )
+
+    # Every argument substituted into a quoted `q=` filter literal has to be
+    # constrained, in the tool declaration and in the prompt, with the same
+    # pattern. This is reported rather than silently allowed because the value
+    # that reaches it is typed by the user.
+    constrained = sum(1 for _ in prompt_contract.filter_literal_parameters(contract))
+    if constrained:
+        out.append(
+            finding(
+                OK,
+                "tool/filter-constrained",
+                "all %d argument(s) substituted into a quoted `q=` filter literal are constrained "
+                "by a pattern in both the tool description and the prompt" % constrained,
             )
         )
 
@@ -980,11 +1039,19 @@ def classify(findings):
     underlying problem was fixed (or the check changed shape) and the list has
     become stale. That is reported as a real warning so the entry is removed
     rather than left behind as a dead blanket.
+
+    It is reported only when nothing else failed. A run that already has errors
+    has not "stopped" firing any accepted finding: it simply never got to the
+    check, because an earlier one returned early. Reporting that as a stale
+    entry sends the reader to `ACCEPTED_FINDINGS` to fix a list that is fine,
+    while the actual defect sits unmentioned above it.
     """
     for item in findings:
         if item.level == WARNING and item.code in ACCEPTED_FINDINGS:
             item.level = ACCEPTED
             item.reason = ACCEPTED_FINDINGS[item.code]
+    if any(item.level == ERROR for item in findings):
+        return findings
     fired = {f.code for f in findings if f.level == ACCEPTED}
     for code in sorted(set(ACCEPTED_FINDINGS) - fired):
         findings.append(

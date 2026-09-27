@@ -135,3 +135,13 @@ harness enforces. Adding a rule means adding its mandatory clauses there, and a 
 will immediately check that removing any one of those clauses fails. If you strengthen
 an existing rule, add the new clause and let the test tell you the rule is enforced
 rather than merely present.
+
+Clause presence is only half of it. A rule can also be *inverted* — every required
+phrase kept, with a clause added that permits the opposite — and a presence check
+reports that as healthy. Every rule therefore carries a set of `forbidden` patterns
+that, if they match the rule body, mean the rule is not in force. When you add a rule,
+add patterns to it and a matching sample phrase to `INVERSIONS` in
+`tests/test_prompt_contract.py`; a test fails if a pattern has no sample or a sample
+has no pattern, so neither half can be added alone. The sample phrases are necessarily
+a list of known phrasings rather than a general test: extending it is a deliberate,
+reviewed edit, which is the point.
