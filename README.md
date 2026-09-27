@@ -3,7 +3,7 @@
 [![CI](https://github.com/Shreyansh2203/Product-Comparison-Advisor---AI-Agent/actions/workflows/json-validate.yml/badge.svg)](https://github.com/Shreyansh2203/Product-Comparison-Advisor---AI-Agent/actions/workflows/json-validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-An Oracle Fusion Cloud AI Agent that compares two or more Items on a curated set of ~120 product and manufacturing attributes, and returns a self-contained HTML comparison table in which every genuinely different attribute is highlighted in a consistent premium UI.
+An Oracle Fusion Cloud AI Agent that compares two or more Items on a curated set of 62 product and manufacturing attributes, and returns a self-contained HTML comparison table in which every genuinely different attribute is highlighted in a consistent premium UI.
 
 Everything a reviewer needs in order to judge this agent is in this file: the guardrails, a worked end-to-end example with the exact HTML output, the configuration, and a checklist for verifying it in a real tenant.
 
@@ -30,7 +30,7 @@ Everything a reviewer needs in order to judge this agent is in this file: the gu
 
 Developed and deployed for Verdesian Life Sciences (Oracle Fusion Cloud SCM 25C) to eliminate manual item attribute comparison during item creation and lifecycle maintenance.
 
-The agent calls Oracle's own item APIs, renders a single HTML table of 120+ whitelisted attributes grouped by business area, and highlights only the attributes that genuinely differ. Its differentiating constraint is **strict anti-hallucination**: because the entire logic lives in prompt text rather than code, the risk of the agent inventing a plausible value is the primary engineering concern. The prompt therefore encodes a non-negotiable set of data-integrity guardrails, and this repository ships an offline test harness that verifies those guardrails are actually present in the text and actually imply the required behaviour.
+The agent calls Oracle's own item APIs, renders a single HTML table of 62 whitelisted attributes grouped by business area, and highlights only the attributes that genuinely differ. Its differentiating constraint is **strict anti-hallucination**: because the entire logic lives in prompt text rather than code, the risk of the agent inventing a plausible value is the primary engineering concern. The prompt therefore encodes a non-negotiable set of data-integrity guardrails, and this repository ships an offline test harness that verifies those guardrails are actually present in the text and actually imply the required behaviour.
 
 ## 💼 Business Value
 
@@ -38,7 +38,7 @@ The agent calls Oracle's own item APIs, renders a single HTML table of 120+ whit
 | :--- | :--- | :--- |
 | Manual side-by-side review of item attributes | One request triggers 3 API calls and returns a formatted table | Minutes instead of tens of minutes per comparison |
 | Silent drift between item master records | Difference-only highlighting makes drift visible at a glance | Fewer master-data quality escapes |
-| Attribute lookup across business areas | 120+ attributes grouped into 8 sections | Single view instead of 8 screens |
+| Attribute lookup across business areas | 62 attributes grouped into 8 sections | Single view instead of 8 screens |
 
 ## ⚙️ System Architecture
 
@@ -79,7 +79,7 @@ Steps 1 and 2 must not run in parallel, because step 2's only argument is produc
 ## 🔄 Software Development Life Cycle (SDLC)
 
 1. **Requirements**: Gathered directly from Verdesian's item creation and master-data maintenance workflows.
-2. **Design**: Mapped 120+ raw API fields to 8 business groups, deliberately excluding cost fields so the table stays a true side-by-side and a price change alone never counts as a product difference.
+2. **Design**: Mapped the whitelisted attributes to 8 business groups, deliberately excluding cost fields so the table stays a true side-by-side and a price change alone never counts as a product difference.
 3. **Implementation**: Authored the agent JSON in Oracle AI Agent Studio and exported it to [`PRODUCT_COMPARATOR_V13.json`](./PRODUCT_COMPARATOR_V13.json). Three iterations were needed to force sequential tool execution, eliminate cross-item contamination, and scope the summarizer's `DO NOT COLLAPSE` rule so that non-differing attributes are omitted rather than merged into single rows.
 4. **Testing**: Iteratively refined the prompt against live API responses to eliminate hallucinated values. Shipped with the offline prompt-contract harness described in [Validation](#-validation).
 5. **Deployment**: Imported into Oracle AI Agent Studio, channel published, integrated into the Fusion SCM Item Management screen via the Visual Builder component.
