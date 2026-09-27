@@ -15,22 +15,29 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Every action is pinned to a full 40-character commit SHA with the release tag in
+# a trailing comment. The SHAs below were resolved from the upstream repositories
+# and confirmed to be commit objects through the GitHub API, not copied from a
+# tag page by hand. Bump them with:
+#   git ls-remote --tags https://github.com/actions/checkout.git
+#   git ls-remote --tags https://github.com/actions/setup-python.git
+# and copy the SHA for the exact patch tag you want, peeled if it is annotated.
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.11'
 
       - name: Report tool versions
         run: python --version
 
-      - name: Check JSON syntax for Agent Configuration
+      - name: Confirm the agent configuration still parses
         run: |
           echo "Validating PRODUCT_COMPARATOR_V13.json..."
           python -m json.tool PRODUCT_COMPARATOR_V13.json > /dev/null
@@ -39,12 +46,54 @@ jobs:
       # --strict fails on any finding that is not already signed off in
       # ACCEPTED_FINDINGS, so a genuine regression breaks the build instead of
       # hiding behind the acknowledged model-code / partner-metadata / empty
-      # error-handler / empty-trigger facts.
+      # error-handler / empty-trigger / MaximumInteractions / unbound-parameter
+      # facts.
       - name: Validate agent configuration contract
         run: python scripts/validate_agent.py --strict
 
-      - name: Run structural tests
+      - name: Run structural and prompt-contract tests
         run: |
           set -o pipefail
           python -m unittest discover -s tests -v 2>&1 | tee test-output.log
+          # A discovery mistake can make the suite exit 0 without running anything.
+          # Require an explicit non-zero test count so a silent no-test-run cannot
+          # pass as green.
           grep -Eq '^Ran [1-9][0-9]* tests? in ' test-output.log
+          echo "Test count check passed."
+
+      # A gate that cannot fail is not a gate. Re-introduce a regression the
+      # validator is supposed to catch -- here a changed highlight colour in the
+      # summarization prompt -- on a throwaway copy, and require the validator to
+      # reject it. If this step starts failing with "the gate passed a regression",
+      # the real checks above have been weakened.
+      - name: Confirm the gate rejects a real regression
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          cp PRODUCT_COMPARATOR_V13.json README.md "$work/"
+          cp -r scripts "$work/scripts"
+          python - "$work" <<'PY'
+          import json
+          import os
+          import sys
+
+          path = os.path.join(sys.argv[1], "PRODUCT_COMPARATOR_V13.json")
+          with open(path, encoding="utf-8") as handle:
+              doc = json.load(handle)
+          spec = doc["agents"][0]["Specification"]
+          spec["summarizationPrompt"] = spec["summarizationPrompt"].replace(
+              "#ffe6e6", "#ffcccc"
+          )
+          with open(path, "w", encoding="utf-8") as handle:
+              json.dump(doc, handle, indent=2)
+          PY
+          if output="$(python "$work/scripts/validate_agent.py" --strict 2>&1)"; then
+            echo "::error::the validator accepted a prompt with a changed highlight colour"
+            exit 1
+          fi
+          echo "$output" | grep -q 'highlight' || {
+            echo "::error::the validator failed, but not for the regression that was injected"
+            echo "$output"
+            exit 1
+          }
+          echo "The gate correctly rejected the injected regression."
