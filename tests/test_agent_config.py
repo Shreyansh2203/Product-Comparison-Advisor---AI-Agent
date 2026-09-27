@@ -282,6 +282,107 @@ class ReadmeMatchesConfiguration(unittest.TestCase):
         self.assertNotIn("Using IDs", costs_line[0])
 
 
+class WarningTriageIsMeaningful(unittest.TestCase):
+    """The validator must separate real problems from acknowledged facts.
+
+    A gate that prints an undifferentiated wall of lines gets ignored. These
+    tests pin the four-level model: a passing check is `OK`, a signed-off fact
+    is `ACCEPT` with a reason, and only an unsigned observation is a `WARN`.
+    """
+
+    def _findings(self, doc=None, raw=None, readme=README, config_path=CONFIG_PATH):
+        return validate_agent.validate(
+            DOC if doc is None else doc, RAW if raw is None else raw, config_path, readme
+        )
+
+    def test_passing_checks_are_reported_as_ok_not_as_warnings(self):
+        codes = {f.code for f in self._findings() if f.level == validate_agent.OK}
+        for code in ("identity", "file-name", "disclosure", "guardrail/no-fabrication"):
+            self.assertIn(code, codes, "a check that passed should be OK, not a warning")
+
+    def test_shipped_configuration_has_no_unacknowledged_warnings(self):
+        self.assertEqual(
+            [f.code for f in self._findings() if f.level == validate_agent.WARNING],
+            [],
+            "every finding on the shipped configuration must be OK or explicitly accepted",
+        )
+
+    def test_accepted_findings_are_exactly_the_documented_four(self):
+        accepted = sorted(
+            f.code for f in self._findings() if f.level == validate_agent.ACCEPTED
+        )
+        self.assertEqual(accepted, sorted(validate_agent.ACCEPTED_FINDINGS))
+        self.assertEqual(
+            accepted,
+            ["model-code", "partner-metadata", "pipeline/error-handler", "trigger/rest-empty"],
+        )
+
+    def test_every_accepted_finding_carries_a_reason(self):
+        for item in self._findings():
+            if item.level == validate_agent.ACCEPTED:
+                self.assertTrue(item.reason, "an accepted finding must explain itself")
+                self.assertIn(item.reason, str(item))
+
+    def test_an_accepted_entry_that_stops_firing_is_reported(self):
+        validate_agent.ACCEPTED_FINDINGS["no-such-finding"] = "test-only placeholder"
+        try:
+            codes = {f.code for f in self._findings() if f.level == validate_agent.WARNING}
+        finally:
+            del validate_agent.ACCEPTED_FINDINGS["no-such-finding"]
+        self.assertIn("accepted/stale", codes, "a stale accepted entry must not linger")
+
+    def test_strict_mode_passes_on_the_shipped_configuration(self):
+        # Full coverage, including the README cross-checks: skipping them is
+        # itself an unacknowledged warning, so --no-readme and --strict conflict.
+        self.assertEqual(validate_agent.main([CONFIG_PATH, "--strict", "--quiet"]), 0)
+
+    def test_strict_mode_fails_on_a_new_unacknowledged_warning(self):
+        readme = README.replace("Show only the differences", "show what differs")
+        findings = self._findings(readme=readme)
+        self.assertIn("readme/behaviour", {f.code for f in findings if f.level == validate_agent.WARNING})
+
+
+class ImportTimeStepsAreDeclared(unittest.TestCase):
+    """The two things only an operator can finish must stay declared and documented."""
+
+    def _findings(self, doc=None, readme=README):
+        return validate_agent.validate(DOC if doc is None else doc, RAW, CONFIG_PATH, readme)
+
+    def test_the_shipped_email_error_handler_is_reported_as_accepted(self):
+        handlers = DOC["Specification"]["dataPipeline"]["errorHandlers"]
+        self.assertEqual([h["type"] for h in handlers], ["EMAIL"])
+        self.assertTrue(all(not i["value"] for i in handlers[0]["inputs"]))
+        codes = {f.code for f in self._findings() if f.level == validate_agent.ACCEPTED}
+        self.assertIn("pipeline/error-handler", codes)
+
+    def test_the_shipped_rest_trigger_is_reported_as_accepted(self):
+        self.assertEqual(DOC["Specification"]["triggers"], [{"type": "REST", "inputs": []}])
+        codes = {f.code for f in self._findings() if f.level == validate_agent.ACCEPTED}
+        self.assertIn("trigger/rest-empty", codes)
+
+    def test_configuring_the_error_handler_clears_the_finding(self):
+        doc = copy.deepcopy(DOC)
+        for entry in doc["Specification"]["dataPipeline"]["errorHandlers"][0]["inputs"]:
+            entry["value"] = "set-at-import"
+        codes = {f.code for f in self._findings(doc=doc) if f.level != validate_agent.OK}
+        self.assertNotIn("pipeline/error-handler", codes)
+
+    def test_readme_must_keep_documenting_both_import_steps(self):
+        for stripped in ("errorHandlers", "triggers"):
+            readme = README.replace(stripped, "removed")
+            codes = {f.code for f in self._findings(readme=readme) if f.level == validate_agent.ERROR}
+            self.assertIn("readme/import-step", codes, "dropping the %s step must fail" % stripped)
+
+    def test_the_file_name_is_enforced_as_a_contract_not_a_hint(self):
+        renamed = os.path.join(REPO_ROOT, "PRODUCT_COMPARATOR_V14.json")
+        codes = {
+            f.code
+            for f in validate_agent.validate(DOC, RAW, renamed, README)
+            if f.level == validate_agent.ERROR
+        }
+        self.assertIn("file-name", codes, "renaming the configuration must fail the gate")
+
+
 class ValidatorBehavesLikeAGate(unittest.TestCase):
     """Negative tests: the validator must fail on each defect it claims to catch."""
 

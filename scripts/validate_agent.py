@@ -11,7 +11,7 @@ dependencies, runnable as:
 
     python scripts/validate_agent.py
 
-It performs four families of checks:
+It performs five families of checks:
 
   * structure    - the document has the keys AI Agent Studio expects and is self-consistent
   * contract     - the prompt only calls tools that are actually defined, the model
@@ -21,8 +21,20 @@ It performs four families of checks:
                    guardrails are present in the agent prompt text
   * disclosure   - no credentials, tenancy identifiers, or customer data are
                    committed, and the README still matches the configuration
+  * deployment   - the work an operator must finish at import time is still
+                   declared, and the README still tells them to do it
 
-Exit codes: 0 = no errors, 1 = at least one error, 2 = the validator could not run.
+Findings carry one of four levels, and the distinction between them is the
+point of the script. A check that passes is reported as `OK`, not as a
+warning; a check that reports something real but unfixable in this repository
+is reported as `ACCEPT` and carries the reason recorded in `ACCEPTED_FINDINGS`
+below; only something that nobody has signed off on is a `WARN` or an `ERROR`.
+A gate whose output is one undifferentiated wall of lines teaches readers to
+ignore it, so `--strict` fails on `WARN` alone and the shipped configuration
+passes it.
+
+Exit codes: 0 = no errors, 1 = at least one error (or a warning under
+`--strict`), 2 = the validator could not run.
 """
 
 from __future__ import annotations
@@ -39,6 +51,44 @@ DEFAULT_README = os.path.join(REPO_ROOT, "README.md")
 
 ERROR = "ERROR"
 WARNING = "WARN"
+ACCEPTED = "ACCEPT"
+OK = "OK"
+
+# Findings that are genuine observations but that this repository has
+# deliberately decided not to fix. Each is downgraded from WARN to ACCEPT when
+# it fires, so the default output separates "nobody has signed this off" from
+# "this is signed off, here is why". A finding is only listed here when fixing
+# it is either impossible without tenant information or would risk breaking an
+# existing Oracle AI Agent Studio import.
+#
+# Adding an entry is a decision, not a silencing mechanism: the reason is
+# printed with the finding, documented in README.md under "Known Limitations",
+# and the entry itself goes stale (a real WARN) if the underlying finding stops
+# firing, so the list cannot quietly rot into a blanket suppression.
+ACCEPTED_FINDINGS = {
+    "model-code": (
+        "Oracle assigns modelConfiguration.code when the agent is exported, and the "
+        "model is selected by model/modelName/provider rather than by this code. Editing "
+        "an Oracle-assigned code risks breaking the AI Agent Studio import, so the "
+        "mismatch is recorded here instead of rewritten."
+    ),
+    "partner-metadata": (
+        "partnerMetadata.Name is an opaque four-character value whose provenance is not "
+        "recorded anywhere in this repository. It may be meaningful to Oracle, so it is "
+        "left exactly as shipped. A human must confirm it identifies no customer or "
+        "person; see README 'Known Limitations'."
+    ),
+    "pipeline/error-handler": (
+        "The EMAIL error handler's recipient, subject, and body are tenant facts that "
+        "cannot be known from this repository, and a placeholder address would be worse "
+        "than an empty one. The README makes it an explicit operator task at import time."
+    ),
+    "trigger/rest-empty": (
+        "The REST trigger's endpoint contract belongs to whichever system calls the "
+        "agent, which is not known at authoring time. The README makes it an explicit "
+        "operator task at import time."
+    ),
+}
 
 TOP_LEVEL_KEYS = {
     "Specification",
@@ -125,15 +175,19 @@ CUSTOMER_NAME_PATTERN = re.compile(r"verdesian", re.IGNORECASE)
 
 
 class Finding:
-    __slots__ = ("level", "code", "message")
+    __slots__ = ("level", "code", "message", "reason")
 
-    def __init__(self, level, code, message):
+    def __init__(self, level, code, message, reason=None):
         self.level = level
         self.code = code
         self.message = message
+        self.reason = reason
 
     def __str__(self):
-        return "%-5s [%s] %s" % (self.level, self.code, self.message)
+        head = "%-6s [%s] %s" % (self.level, self.code, self.message)
+        if self.reason:
+            return head + "\n         reason: " + self.reason
+        return head
 
 
 def finding(level, code, message):
@@ -222,7 +276,7 @@ def check_structure(doc, raw, ctx):
     if missing:
         out.append(finding(ERROR, "top-level-keys", "missing top-level keys: %s" % ", ".join(missing)))
     else:
-        out.append(finding(WARNING, "top-level-keys", "all expected top-level keys present"))
+        out.append(finding(OK, "top-level-keys", "all expected top-level keys present"))
 
     spec = doc.get("Specification") or {}
     if spec.get("jsonSchemaName") != "Workflow.spec":
@@ -286,7 +340,7 @@ def check_structure(doc, raw, ctx):
             )
         )
     else:
-        out.append(finding(WARNING, "identity", "agent identity consistent: %s" % next(iter(distinct))))
+        out.append(finding(OK, "identity", "agent identity consistent: %s" % next(iter(distinct))))
 
     if not isinstance(agent.get("MaximumInteractions"), int) or agent.get("MaximumInteractions", 0) < 1:
         out.append(
@@ -297,11 +351,26 @@ def check_structure(doc, raw, ctx):
                 % agent.get("MaximumInteractions"),
             )
         )
-
-    declared_file = os.path.basename(ctx["config_path"])
-    if codes["WorkflowCode"] and declared_file.startswith(str(codes["WorkflowCode"])):
+    else:
         out.append(
-            finding(WARNING, "file-name", "file name %r matches the declared agent code" % declared_file)
+            finding(OK, "max-interactions", "agent turn limit: %d" % agent["MaximumInteractions"])
+        )
+
+    # The file name is the agent's published code and existing imports bind to
+    # it, so a rename is a breaking change rather than a cosmetic one.
+    declared_file = os.path.basename(ctx["config_path"])
+    if codes["WorkflowCode"] and not declared_file.startswith(str(codes["WorkflowCode"])):
+        out.append(
+            finding(
+                ERROR,
+                "file-name",
+                "file name %r does not match the declared agent code %r; renaming this file "
+                "breaks every existing import" % (declared_file, codes["WorkflowCode"]),
+            )
+        )
+    else:
+        out.append(
+            finding(OK, "file-name", "file name %r matches the declared agent code" % declared_file)
         )
 
     partner = doc.get("partnerMetadata") or {}
@@ -329,7 +398,7 @@ def check_contract(doc, raw, ctx):
         out.append(finding(ERROR, "tools", "no REST tools are defined on the agent"))
         return out
     out.append(
-        finding(WARNING, "tools", "tools defined: %s" % ", ".join(tool_names))
+        finding(OK, "tools", "tools defined: %s" % ", ".join(tool_names))
     )
 
     # Every tool the prompt tells the agent to call must actually be defined.
@@ -360,7 +429,7 @@ def check_contract(doc, raw, ctx):
         )
     else:
         out.append(
-            finding(WARNING, "tool-references", "every defined tool is referenced in the prompt text")
+            finding(OK, "tool-references", "every defined tool is referenced in the prompt text")
         )
 
     # Model configuration must be present at both levels and self-consistent.
@@ -388,7 +457,7 @@ def check_contract(doc, raw, ctx):
                 )
     model_name = inner.get("modelName") or top.get("modelName") or ""
     if model_name:
-        out.append(finding(WARNING, "model", "inference model: %s / %s" % (top.get("model"), model_name)))
+        out.append(finding(OK, "model", "inference model: %s / %s" % (top.get("model"), model_name)))
     if inner.get("code") and model_name:
         normalise = lambda s: re.sub(r"[^a-z0-9]", "", str(s).lower())
         if normalise(model_name) not in normalise(inner["code"]):
@@ -452,7 +521,7 @@ def check_contract(doc, raw, ctx):
         )
     elif versions:
         out.append(
-            finding(WARNING, "api-version", "SCM REST API version consistent: %s" % next(iter(versions)))
+            finding(OK, "api-version", "SCM REST API version consistent: %s" % next(iter(versions)))
         )
 
     # Documented output contract.
@@ -467,7 +536,7 @@ def check_contract(doc, raw, ctx):
         )
     else:
         out.append(
-            finding(WARNING, "highlight-color", "highlight colour %s present" % HIGHLIGHT_COLOR)
+            finding(OK, "highlight-color", "highlight colour %s present" % HIGHLIGHT_COLOR)
         )
     for needle, label in (
         ("<tr>", "an HTML row per attribute"),
@@ -502,7 +571,7 @@ def check_guardrails(doc, raw, ctx):
                 )
             )
         else:
-            out.append(finding(WARNING, "guardrail/" + code, "guardrail present: %s" % label))
+            out.append(finding(OK, "guardrail/" + code, "guardrail present: %s" % label))
 
     # The system prompt (not just the summarizer) must forbid invention, so the
     # prohibition is in force while the agent is still choosing field values.
@@ -546,7 +615,7 @@ def check_disclosure(doc, raw, ctx):
     if not any(f.code.startswith(("secret/", "customer-data")) for f in out):
         out.append(
             finding(
-                WARNING,
+                OK,
                 "disclosure",
                 "no credentials, tenancy identifiers, hosts, or customer data found in the configuration",
             )
@@ -609,7 +678,7 @@ def check_readme(doc, raw, ctx):
     if readme_paths and readme_paths <= json_paths:
         out.append(
             finding(
-                WARNING,
+                OK,
                 "readme/endpoint",
                 "all %d README endpoints match the configuration" % len(readme_paths),
             )
@@ -622,7 +691,7 @@ def check_readme(doc, raw, ctx):
                 finding(ERROR, "readme/tool", "README names tool %r which the agent does not define" % token)
             )
     if not any(f.code == "readme/tool" and f.level == ERROR for f in out):
-        out.append(finding(WARNING, "readme/tool", "README tool names match the defined tools"))
+        out.append(finding(OK, "readme/tool", "README tool names match the defined tools"))
 
     if HIGHLIGHT_COLOR not in readme:
         out.append(
@@ -633,7 +702,7 @@ def check_readme(doc, raw, ctx):
             )
         )
     else:
-        out.append(finding(WARNING, "readme/highlight", "README states the %s highlight colour" % HIGHLIGHT_COLOR))
+        out.append(finding(OK, "readme/highlight", "README states the %s highlight colour" % HIGHLIGHT_COLOR))
 
     model_name = ((agent.get("Specification") or {}).get("modelConfiguration") or {}).get("modelName") or ""
     if model_name and model_name.lower() not in readme.lower():
@@ -641,7 +710,7 @@ def check_readme(doc, raw, ctx):
             finding(ERROR, "readme/model", "README does not name the configured model %r" % model_name)
         )
     elif model_name:
-        out.append(finding(WARNING, "readme/model", "README names the configured model %s" % model_name))
+        out.append(finding(OK, "readme/model", "README names the configured model %s" % model_name))
 
     if "Show only the differences" not in readme and "show only differences" not in readme.lower():
         out.append(
@@ -654,13 +723,115 @@ def check_readme(doc, raw, ctx):
     return out
 
 
+def check_deployment(doc, raw, ctx):
+    """Check the configuration work that only an operator can finish at import.
+
+    The recipient of the pipeline error email and the endpoint contract of the
+    REST trigger are both tenant facts: neither can be derived from this
+    repository, and inventing a placeholder for either would be worse than
+    leaving the field empty. They are therefore reported as acknowledged
+    findings rather than errors.
+
+    They are still asserted, because the moment the JSON stops declaring them
+    the documented import steps stop being necessary and the README becomes
+    misleading. That is what the README cross-check below enforces, so an
+    accepted finding can never quietly turn into an undocumented gap.
+    """
+    out = []
+    spec = doc.get("Specification") or {}
+
+    for handler in (spec.get("dataPipeline") or {}).get("errorHandlers") or []:
+        if handler.get("type") != "EMAIL":
+            continue
+        blank = sorted(
+            entry.get("name")
+            for entry in handler.get("inputs") or []
+            if not (entry.get("value") or "").strip()
+        )
+        if blank:
+            out.append(
+                finding(
+                    WARNING,
+                    "pipeline/error-handler",
+                    "the EMAIL error handler has no %s, so pipeline errors are discarded"
+                    % ", ".join("'%s'" % name for name in blank),
+                )
+            )
+
+    for trigger in spec.get("triggers") or []:
+        if trigger.get("type") == "REST" and not trigger.get("inputs"):
+            out.append(
+                finding(
+                    WARNING,
+                    "trigger/rest-empty",
+                    "the REST trigger declares no inputs, so the calling endpoint contract "
+                    "must be chosen at import",
+                )
+            )
+
+    readme = ctx.get("readme_text")
+    if readme is None:
+        return out
+    lowered = readme.lower()
+    undocumented = [
+        label
+        for needle, label in (
+            ("errorhandlers", "the EMAIL error-handler recipient"),
+            ("triggers", "the REST trigger endpoint"),
+        )
+        if needle not in lowered
+    ]
+    for label in undocumented:
+        out.append(
+            finding(
+                ERROR,
+                "readme/import-step",
+                "README no longer documents the import-time step for %s" % label,
+            )
+        )
+    if not undocumented:
+        out.append(
+            finding(
+                OK,
+                "readme/import-step",
+                "README documents both import-time configuration steps",
+            )
+        )
+    return out
+
+
 CHECKS = [
     ("structure", check_structure),
     ("contract", check_contract),
     ("guardrails", check_guardrails),
     ("disclosure", check_disclosure),
     ("readme", check_readme),
+    ("deployment", check_deployment),
 ]
+
+
+def classify(findings):
+    """Downgrade signed-off findings from WARN to ACCEPT, and police the list.
+
+    A finding listed in `ACCEPTED_FINDINGS` that no longer fires means the
+    underlying problem was fixed (or the check changed shape) and the list has
+    become stale. That is reported as a real warning so the entry is removed
+    rather than left behind as a dead blanket.
+    """
+    for item in findings:
+        if item.level == WARNING and item.code in ACCEPTED_FINDINGS:
+            item.level = ACCEPTED
+            item.reason = ACCEPTED_FINDINGS[item.code]
+    fired = {f.code for f in findings if f.level == ACCEPTED}
+    for code in sorted(set(ACCEPTED_FINDINGS) - fired):
+        findings.append(
+            finding(
+                WARNING,
+                "accepted/stale",
+                "ACCEPTED_FINDINGS lists %r but it no longer occurs; remove the entry" % code,
+            )
+        )
+    return findings
 
 
 def validate(doc, raw, config_path=DEFAULT_CONFIG, readme_text=None):
@@ -671,7 +842,7 @@ def validate(doc, raw, config_path=DEFAULT_CONFIG, readme_text=None):
             findings.extend(check(doc, raw, ctx))
         except Exception as exc:  # a crashing check is itself a failure
             findings.append(finding(ERROR, "validator", "check raised %s: %s" % (type(exc).__name__, exc)))
-    return findings
+    return classify(findings)
 
 
 def main(argv=None):
@@ -679,7 +850,15 @@ def main(argv=None):
     parser.add_argument("config", nargs="?", default=DEFAULT_CONFIG, help="path to the agent JSON")
     parser.add_argument("--readme", default=DEFAULT_README, help="path to the README to cross-check")
     parser.add_argument("--no-readme", action="store_true", help="skip the README cross-checks")
-    parser.add_argument("--strict", action="store_true", help="treat warnings as errors")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="treat unacknowledged warnings as errors (accepted findings do not count)",
+    )
+    parser.add_argument("--verbose", action="store_true", help="also print the passing OK checks")
+    parser.add_argument(
+        "--explain", action="store_true", help="print the accepted-findings list and its reasons"
+    )
     parser.add_argument("--quiet", action="store_true", help="only print errors and the summary")
     args = parser.parse_args(argv)
 
@@ -705,17 +884,33 @@ def main(argv=None):
 
     errors = [f for f in findings if f.level == ERROR]
     warnings = [f for f in findings if f.level == WARNING]
+    accepted = [f for f in findings if f.level == ACCEPTED]
+    confirmed = [f for f in findings if f.level == OK]
+
     for item in findings:
-        if not args.quiet or item.level == ERROR:
-            print("  " + str(item))
+        if args.quiet and item.level != ERROR:
+            continue
+        if item.level == OK and not args.verbose:
+            continue
+        print("  " + str(item))
+
+    if args.explain:
+        print("")
+        print("acknowledged findings (%d accepted, %d confirmed):" % (len(accepted), len(confirmed)))
+        for code in sorted(ACCEPTED_FINDINGS):
+            print("  %s [%s]" % (ACCEPTED.ljust(6), code))
+            print("         %s" % ACCEPTED_FINDINGS[code])
 
     print("")
-    print("%d error(s), %d warning(s)" % (len(errors), len(warnings)))
+    print(
+        "%d error(s), %d warning(s), %d accepted, %d confirmed"
+        % (len(errors), len(warnings), len(accepted), len(confirmed))
+    )
     if errors:
         print("FAILED: the configuration does not satisfy its own contract.")
         return 1
     if args.strict and warnings:
-        print("FAILED (--strict): warnings treated as errors.")
+        print("FAILED (--strict): unacknowledged warnings treated as errors.")
         return 1
     print("OK: the configuration is valid and internally consistent.")
     return 0
