@@ -18,3 +18,11 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "ci"
+    ignore:
+      # The CodeQL action's v4 line fails at "Perform CodeQL Analysis" on this repo
+      # while the pinned v3.38.2 passes, so Dependabot kept reopening a red PR for
+      # a major bump. Patch and minor bumps within v3 are still proposed. Revisit
+      # by trying v4 by hand and reading what the failing step says; this is a
+      # deliberate hold, not a claim that v4 is broken in general.
+      - dependency-name: "github/codeql-action"
+        update-types: ["version-update:semver-major"]
