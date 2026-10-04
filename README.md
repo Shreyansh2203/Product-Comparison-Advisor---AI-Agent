@@ -377,7 +377,10 @@ python -m unittest discover -s tests
 - a well-formed configuration, consistent top-level and agent-level model settings, and a positive turn limit;
 - **both `MaximumInteractions` fields being mutually consistent** — a top-level budget below the agent's own budget would truncate the agent;
 - **validated model properties** — `reasoning_effort` must be a value the provider documents, `k` must be a non-negative integer (`0` meaning "top-k sampling off, use the model default"), `max_completion_tokens` a positive integer, and all three must agree between the workflow-level and agent-level model configuration;
-- single-version REST APIs, unique tool names, a coherent pipeline node graph, and a partner metadata block that leaks no customer name;
+- single-version REST APIs, unique tool names, and a partner metadata block that leaks no customer name;
+- **a walkable pipeline node graph** — `dataPipeline.rootNode` must name a declared node, node ids must be unique and present, and some node must be the `END` terminator. This is the only part of the document that says what the platform executes, so nothing else in the gate covers it;
+- **`summarizationMode` must be `Custom`** — the entire output contract (template, highlight style, escaping rule) lives in `summarizationPrompt`, which the platform honours only in Custom mode. Flipping that one string would disable every rule below with nothing failing;
+- **`FollowUpPromptEnabledFlag` must be false** — the shipped `FollowUpPrompt` interpolates `$param.system_context.chat_history`, which is user-influenced text, into a generation instruction; enabling it needs its own prompt-injection review;
 - no committed credentials, tokens, tenant URLs, or customer names;
 - the guardrail blocks and the summarization template being present and complete;
 - **each guardrail clause-scoped rather than keyword-scoped** - a guardrail is satisfied only when every mandatory clause of the rule that owns it is still written in the rule's own block, and a rule that gains a clause permitting the opposite is reported rather than passing because its phrases are all still present;

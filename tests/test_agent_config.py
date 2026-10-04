@@ -129,6 +129,50 @@ class ToolsAreCallable(unittest.TestCase):
         for name in TOOL_NAMES:
             self.assertIn(name, prompt_text, "tool %r is attached but unreachable" % name)
 
+    def test_tool_names_are_unique(self):
+        # prompt_contract indexes tools with dict((name, tool) ...), so a duplicate
+        # name used to collapse to the last definition and every downstream check
+        # passed against it.
+        self.assertEqual(len(TOOL_NAMES), len(set(TOOL_NAMES)))
+
+
+class OutputContractIsInForce(unittest.TestCase):
+    def test_summarization_mode_is_custom(self):
+        # Every rule the gate verifies below is written in summarizationPrompt, which
+        # the platform honours only in Custom mode. Flipping this one string would
+        # disable the whole output contract with nothing failing.
+        self.assertEqual(AGENT_SPEC["summarizationMode"], "Custom")
+
+    def test_follow_up_prompt_is_switched_off(self):
+        # The shipped FollowUpPrompt interpolates $param.system_context.chat_history
+        # into a generation instruction, so enabling it needs its own review.
+        self.assertFalse(DOC.get("FollowUpPromptEnabledFlag"))
+
+    def test_agent_turn_limit_is_a_positive_integer_not_a_boolean(self):
+        limit = AGENT["MaximumInteractions"]
+        self.assertIsInstance(limit, int)
+        self.assertNotIsInstance(limit, bool)
+        self.assertGreaterEqual(limit, 1)
+
+
+class PipelineGraphIsWalkable(unittest.TestCase):
+    PIPELINE = DOC["Specification"]["dataPipeline"]
+
+    def test_the_root_node_is_declared(self):
+        ids = [node["id"] for node in self.PIPELINE["pipelineNodes"]]
+        self.assertIn(self.PIPELINE["rootNode"], ids)
+
+    def test_node_ids_are_unique_and_present(self):
+        ids = [node["id"] for node in self.PIPELINE["pipelineNodes"]]
+        self.assertTrue(all(ids), "a pipeline node without an id")
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_the_graph_can_finish(self):
+        self.assertTrue(
+            any(node["type"] == "END" for node in self.PIPELINE["pipelineNodes"]),
+            "no END node, so the pipeline declares no way to finish",
+        )
+
     def test_extended_attribute_tool_takes_only_an_item_id(self):
         entry = DOC["agents"][0]["tools"][0]["RestTool"]["ObjectProperties"]["tools"][0]
         self.assertEqual(entry["name"], "Get_Extended_Attribute_Values")
@@ -537,6 +581,58 @@ class ValidatorBehavesLikeAGate(unittest.TestCase):
                         param["description"] = "Item Number, Component Item Number or Item"
         codes = self._codes(doc)
         self.assertIn("prompt-contract/tool/filter-parameter-unconstrained", codes)
+
+    def test_detects_a_duplicate_tool_name(self):
+        doc = copy.deepcopy(DOC)
+        tools = doc["agents"][0]["tools"]
+        tools.append(copy.deepcopy(tools[0]))
+        self.assertIn("tools/duplicate", self._codes(doc))
+
+    def test_detects_a_summarization_mode_that_ignores_the_output_contract(self):
+        doc = copy.deepcopy(DOC)
+        doc["agents"][0]["Specification"]["summarizationMode"] = "Default"
+        self.assertIn("summarization-mode", self._codes(doc))
+
+    def test_detects_an_enabled_follow_up_prompt(self):
+        doc = copy.deepcopy(DOC)
+        doc["FollowUpPromptEnabledFlag"] = True
+        self.assertIn("follow-up-prompt", self._codes(doc))
+
+    def test_detects_a_boolean_turn_limit(self):
+        # isinstance(True, int) is True and True < 1 is False, so the naive
+        # positive-integer test accepted it and reported a limit of one.
+        doc = copy.deepcopy(DOC)
+        doc["agents"][0]["MaximumInteractions"] = True
+        self.assertIn("max-interactions", self._codes(doc))
+
+    def test_detects_a_root_node_that_is_not_declared(self):
+        doc = copy.deepcopy(DOC)
+        doc["Specification"]["dataPipeline"]["rootNode"] = "start"
+        self.assertIn("pipeline/root", self._codes(doc))
+
+    def test_detects_duplicate_pipeline_node_ids(self):
+        doc = copy.deepcopy(DOC)
+        nodes = doc["Specification"]["dataPipeline"]["pipelineNodes"]
+        nodes.append(copy.deepcopy(nodes[0]))
+        self.assertIn("pipeline/node-ids", self._codes(doc))
+
+    def test_detects_an_empty_pipeline(self):
+        doc = copy.deepcopy(DOC)
+        doc["Specification"]["dataPipeline"]["pipelineNodes"] = []
+        self.assertIn("pipeline/nodes", self._codes(doc))
+
+    def test_detects_a_pipeline_with_no_terminator(self):
+        doc = copy.deepcopy(DOC)
+        doc["Specification"]["dataPipeline"]["pipelineNodes"][0]["type"] = "WORK"
+        self.assertIn("pipeline/terminator", self._codes(doc))
+
+    def test_reported_model_properties_are_the_configured_ones(self):
+        # The finding used to print a literal 8000 whatever the file said, so a
+        # changed max_completion_tokens was reported as if nothing had moved.
+        findings = validate_agent.validate(DOC, RAW, CONFIG_PATH, README)
+        reported = [f.message for f in findings if f.code == "model-properties" and f.level == validate_agent.OK]
+        self.assertTrue(reported, "the configured modelProperties are not reported at all")
+        self.assertIn(str(AGENT_SPEC["modelConfiguration"]["modelProperties"]["max_completion_tokens"]), reported[0])
 
     def test_a_contract_violation_is_not_reported_as_a_stale_accepted_finding(self):
         # `check_prompt_semantics` used to return as soon as the contract had any

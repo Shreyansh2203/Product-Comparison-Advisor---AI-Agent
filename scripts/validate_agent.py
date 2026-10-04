@@ -409,6 +409,21 @@ def check_structure(doc, raw, ctx):
             )
         )
 
+    # The shipped FollowUpPrompt interpolates $param.system_context.chat_history --
+    # user-influenced conversation text -- into a generation instruction. It is
+    # disabled, and re-enabling it is a one-word edit that no other check would
+    # catch, so the flag itself is the thing worth pinning.
+    if doc.get("FollowUpPromptEnabledFlag"):
+        out.append(
+            finding(
+                ERROR,
+                "follow-up-prompt",
+                "FollowUpPromptEnabledFlag is truthy while the shipped FollowUpPrompt interpolates "
+                "$param.system_context.chat_history (user-influenced text) into a generation "
+                "instruction; turning it on needs its own prompt-injection review",
+            )
+        )
+
     agents = doc.get("agents") or []
     if len(agents) != 1:
         out.append(finding(ERROR, "agent-count", "expected exactly 1 agent, found %d" % len(agents)))
@@ -455,18 +470,20 @@ def check_structure(doc, raw, ctx):
     else:
         out.append(finding(OK, "identity", "agent identity consistent: %s" % next(iter(distinct))))
 
-    if not isinstance(agent.get("MaximumInteractions"), int) or agent.get("MaximumInteractions", 0) < 1:
+    agent_limit = agent.get("MaximumInteractions")
+    # isinstance(True, int) is True and True < 1 is False, so a boolean sails
+    # through a naive positive-integer test and gets reported as a limit of 1.
+    if isinstance(agent_limit, bool) or not isinstance(agent_limit, int) or agent_limit < 1:
         out.append(
             finding(
                 ERROR,
                 "max-interactions",
-                "agents[0].MaximumInteractions must be a positive integer, got %r"
-                % agent.get("MaximumInteractions"),
+                "agents[0].MaximumInteractions must be a positive integer, got %r" % agent_limit,
             )
         )
     else:
         out.append(
-            finding(OK, "max-interactions", "agent turn limit: %d" % agent["MaximumInteractions"])
+            finding(OK, "max-interactions", "agent turn limit: %d" % agent_limit)
         )
 
     # The document carries two fields named MaximumInteractions and Oracle does not
@@ -519,6 +536,37 @@ def check_contract(doc, raw, ctx):
     if not tool_names:
         out.append(finding(ERROR, "tools", "no REST tools are defined on the agent"))
         return out
+
+    # Both the prompt and the contract address a tool by name, and the contract
+    # builds its lookup with dict((name, tool) ...), so a duplicate name used to
+    # collapse silently to the last definition and every later check passed.
+    duplicates = sorted({n for n in tool_names if tool_names.count(n) > 1})
+    if duplicates:
+        out.append(
+            finding(
+                ERROR,
+                "tools/duplicate",
+                "duplicate tool name(s): %s; a name has to identify exactly one tool"
+                % ", ".join(duplicates),
+            )
+        )
+
+    # The entire output contract -- template, highlight style, escaping rule --
+    # lives in summarizationPrompt, and the platform only honours it when
+    # summarizationMode is Custom. Flipping that one string disables every rule
+    # the gate below verifies, with no failure anywhere.
+    agent_spec = agent.get("Specification") or {}
+    if agent_spec.get("summarizationMode") != "Custom":
+        out.append(
+            finding(
+                ERROR,
+                "summarization-mode",
+                "agents[0].Specification.summarizationMode is %r, expected 'Custom': the output "
+                "contract is written in summarizationPrompt, which is honoured only in Custom mode"
+                % agent_spec.get("summarizationMode"),
+            )
+        )
+
     out.append(
         finding(OK, "tools", "tools defined: %s" % ", ".join(tool_names))
     )
@@ -997,33 +1045,119 @@ def check_prompt_semantics(doc, raw, ctx):
             )
         )
 
-    effort = (
+    properties = (
         ((doc.get("agents") or [{}])[0].get("Specification") or {})
         .get("modelConfiguration", {})
         .get("modelProperties", {})
-        .get("reasoning_effort")
     )
-    k = (
-        ((doc.get("agents") or [{}])[0].get("Specification") or {})
-        .get("modelConfiguration", {})
-        .get("modelProperties", {})
-        .get("k")
-    )
-    out.append(
-        finding(
-            OK,
-            "model-properties",
-            "modelProperties validated at both levels: reasoning_effort=%r, k=%r "
-            "(top-k sampling disabled, so the model default applies), max_completion_tokens=8000"
-            % (effort, k),
+    effort = properties.get("reasoning_effort")
+    k = properties.get("k")
+    tokens = properties.get("max_completion_tokens")
+    model_violations = [v for v in violations if v.code.startswith("model/")]
+    if model_violations:
+        # Reporting an OK here would contradict the errors the contract raised for the
+        # same fields a few lines above, and the value it printed was a literal rather
+        # than the configured one.
+        out.append(
+            finding(
+                WARNING,
+                "model-properties",
+                "modelProperties are not valid: %s"
+                % ", ".join(v.code for v in model_violations),
+            )
         )
-    )
+    else:
+        out.append(
+            finding(
+                OK,
+                "model-properties",
+                "modelProperties validated at both levels: reasoning_effort=%r, k=%r "
+                "(top-k sampling disabled, so the model default applies), max_completion_tokens=%r"
+                % (effort, k, tokens),
+            )
+        )
+    return out
+
+
+def check_pipeline(doc, raw, ctx):
+    """The declared node graph has to be walkable.
+
+    `Specification.dataPipeline` is the only part of the document that states what
+    the platform actually executes, and until now nothing here read it: a rootNode
+    naming a node that is not declared, two nodes sharing an id, or a graph with
+    no END to run into all passed a gate that reports on prompts and tools only.
+    """
+    out = []
+    pipeline = (doc.get("Specification") or {}).get("dataPipeline") or {}
+    nodes = pipeline.get("pipelineNodes") or []
+    if not nodes:
+        out.append(
+            finding(
+                ERROR,
+                "pipeline/nodes",
+                "Specification.dataPipeline.pipelineNodes is empty, so the workflow declares "
+                "no node graph to run",
+            )
+        )
+        return out
+
+    ids = [node.get("id") for node in nodes]
+    declared = [node_id for node_id in ids if node_id]
+    if len(declared) != len(ids):
+        out.append(
+            finding(
+                ERROR,
+                "pipeline/node-ids",
+                "every pipeline node needs an id; the declared ids are %r" % (ids,),
+            )
+        )
+    duplicates = sorted({node_id for node_id in declared if declared.count(node_id) > 1})
+    if duplicates:
+        out.append(
+            finding(
+                ERROR,
+                "pipeline/node-ids",
+                "duplicate pipeline node id(s): %s; an id has to identify exactly one node"
+                % ", ".join(duplicates),
+            )
+        )
+
+    root = pipeline.get("rootNode")
+    if root not in declared:
+        out.append(
+            finding(
+                ERROR,
+                "pipeline/root",
+                "dataPipeline.rootNode is %r, which is not one of the declared node ids (%s)"
+                % (root, ", ".join(str(node_id) for node_id in declared) or "none"),
+            )
+        )
+
+    if not any(str(node.get("type") or "").upper() == "END" for node in nodes):
+        out.append(
+            finding(
+                ERROR,
+                "pipeline/terminator",
+                "no node has type END, so the pipeline declares no way to finish",
+            )
+        )
+
+    if not out:
+        out.append(
+            finding(
+                OK,
+                "pipeline",
+                "root node %r resolves, %d node(s) with unique ids, END terminator present"
+                % (root, len(nodes)),
+            )
+        )
     return out
 
 
 CHECKS = [
     ("structure", check_structure),
     ("contract", check_contract),
+    ("pipeline", check_pipeline),
     ("guardrails", check_guardrails),
     ("semantics", check_prompt_semantics),
     ("disclosure", check_disclosure),
