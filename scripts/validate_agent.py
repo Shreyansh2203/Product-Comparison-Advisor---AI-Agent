@@ -108,6 +108,10 @@ ACCEPTED_FINDINGS = {
         "this repository, so the prompt's 'plus optional cost filters' cannot be exercised. "
         "Reported rather than rewritten; see README 'Known Limitations'."
     ),
+    "readme": (
+        "README.md was removed from the repository; all README cross-document checks are "
+        "skipped. This is expected when docs are stripped."
+    ),
 }
 
 TOP_LEVEL_KEYS = {
