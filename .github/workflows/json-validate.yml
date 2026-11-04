@@ -59,7 +59,7 @@ jobs:
       # error-handler / empty-trigger / MaximumInteractions / unbound-parameter
       # facts.
       - name: Validate agent configuration contract
-        run: python scripts/validate_agent.py --strict --no-readme
+        run: python scripts/validate_agent.py --strict
 
       - name: Run structural and prompt-contract tests
         run: |
