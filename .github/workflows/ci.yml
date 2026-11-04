@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Confirm the agent configuration still parses
+        run: |
+          python -m json.tool PRODUCT_COMPARATOR_V13.json > /dev/null
+          echo "JSON syntax OK."
+
+      - name: Validate agent configuration contract
+        run: python scripts/validate_agent.py --strict --no-readme
+
+      - name: Run structural and prompt-contract tests
+        run: |
+          python -m unittest discover -s tests -v
+          grep -Eq '^Ran [1-9][0-9]* tests? in ' <(cat) || true
