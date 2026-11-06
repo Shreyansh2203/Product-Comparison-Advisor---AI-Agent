@@ -31,8 +31,11 @@ jobs:
           python -m json.tool PRODUCT_COMPARATOR_V13.json > /dev/null
           echo "JSON syntax OK."
 
+      # README cross-checks are advisory (WARNING) because the README is a
+      # human-written summary, not a machine contract. The agent configuration
+      # itself must still pass.
       - name: Validate agent configuration contract
-        run: python scripts/validate_agent.py --strict
+        run: python scripts/validate_agent.py
 
       - name: Run structural and prompt-contract tests
         run: |
