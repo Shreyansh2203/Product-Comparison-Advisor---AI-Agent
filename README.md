@@ -33,7 +33,7 @@
 
 ## Overview
 
-**Product-Comparison-Advisor** is an Oracle AI Agent configuration package — not a deployable web application. It ships a validated Oracle AI Agent JSON definition (`PRODUCT_COMPARATOR_V13.json`) plus validation tooling to ensure the agent contract, attribute schema, and prompt contract remain consistent across changes. The agent compares 63 product and manufacturing attributes.
+**Product-Comparison-Advisor** is an Oracle AI Agent configuration package — not a deployable web application. It ships a validated Oracle AI Agent JSON definition (`PRODUCT_COMPARATOR_V13.json`) plus validation tooling to ensure the agent contract, attribute schema, and prompt contract remain consistent across changes. The agent compares 63 product and manufacturing attributes across the 30 operational-attribute fields.
 
 Use this repository as the source of truth for the Product Comparison Advisor agent definition in Oracle Cloud Infrastructure.
 

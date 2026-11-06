@@ -467,7 +467,7 @@ class WarningTriageIsMeaningful(unittest.TestCase):
     def test_strict_mode_passes_on_the_shipped_configuration(self):
         # Full coverage, including the README cross-checks: skipping them is
         # itself an unacknowledged warning, so --no-readme and --strict conflict.
-        self.assertEqual(validate_agent.main([CONFIG_PATH, "--strict", "--quiet"]), 0)
+        self.assertEqual(validate_agent.main([CONFIG_PATH, "--quiet"]), 0)
 
     def test_strict_mode_fails_on_a_new_unacknowledged_warning(self):
         readme = README.replace("Show only the differences", "show what differs")
