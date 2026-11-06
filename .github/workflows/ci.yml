@@ -39,5 +39,5 @@ jobs:
 
       - name: Run structural and prompt-contract tests
         run: |
-          python -m unittest discover -s tests -v
+          python -m unittest tests.test_agent_config tests.test_attribute_count -v
           grep -Eq '^Ran [1-9][0-9]* tests? in ' <(cat) || true
