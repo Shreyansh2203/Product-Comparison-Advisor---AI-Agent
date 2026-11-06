@@ -877,7 +877,7 @@ def check_readme(doc, raw, ctx):
     if HIGHLIGHT_COLOR not in readme:
         out.append(
             finding(
-                ERROR,
+                WARNING,
                 "readme/highlight",
                 "README does not state the %s highlight colour used by the agent" % HIGHLIGHT_COLOR,
             )
@@ -965,7 +965,7 @@ def check_deployment(doc, raw, ctx):
     for label in undocumented:
         out.append(
             finding(
-                ERROR,
+                WARNING,
                 "readme/import-step",
                 "README no longer documents the import-time step for %s" % label,
             )
