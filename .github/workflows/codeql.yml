@@ -1,0 +1,57 @@
+name: "CodeQL Security Scan"
+
+# Every action is pinned to a full 40-character commit SHA with the release tag in
+# a trailing comment, on the same policy as json-validate.yml. Bump it with:
+#   git ls-remote --tags https://github.com/github/codeql-action.git
+# and copy the SHA for the exact patch tag you want, peeled if it is annotated
+# (the `refs/tags/vX.Y.Z^{}` line is the commit; the plain line is the tag object).
+# Dependabot keeps the SHA and the comment in step with upstream.
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '30 1 * * 0'
+
+# Weekly, because a new CodeQL query pack ships upstream every week and this
+# repository's own source rarely changes. A scan only on push would leave a
+# published vuln sitting in the alert list for a month.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    # Bounds a stuck scan rather than a slow one. The full matrix is two
+    # languages and no build step, so this is generous.
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # `python` covers the six stdlib-only files under scripts/ and tests/.
+        # `actions` covers the workflow files themselves, which is where a
+        # supply-chain mistake -- a mutable tag, a missing permission, an
+        # unquoted interpolation -- actually lives in a repo like this one.
+        language: [ 'python', 'actions' ]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@1190a975f95ce23525efb6a3fc21ea29567c1b52 # v3.38.2
+      with:
+        languages: ${{ matrix.language }}
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@1190a975f95ce23525efb6a3fc21ea29567c1b52 # v3.38.2
+      with:
+        category: "/language:${{ matrix.language }}"
