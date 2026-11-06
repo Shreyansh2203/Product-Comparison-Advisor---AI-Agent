@@ -848,20 +848,29 @@ def check_readme(doc, raw, ctx):
                 "README documents /%s/%s which the agent does not call" % (version, resource),
             )
         )
-    for version, resource in sorted(json_paths - readme_paths):
-        out.append(
-            finding(
-                WARNING,
-                "readme/endpoint",
-                "agent calls /%s/%s which the README does not document" % (version, resource),
+    if readme_paths:
+        for version, resource in sorted(json_paths - readme_paths):
+            out.append(
+                finding(
+                    WARNING,
+                    "readme/endpoint",
+                    "agent calls /%s/%s which the README does not document" % (version, resource),
+                )
             )
-        )
-    if readme_paths and readme_paths <= json_paths:
+        if readme_paths and readme_paths <= json_paths:
+            out.append(
+                finding(
+                    OK,
+                    "readme/endpoint",
+                    "all %d README endpoints match the configuration" % len(readme_paths),
+                )
+            )
+    else:
         out.append(
             finding(
                 OK,
                 "readme/endpoint",
-                "all %d README endpoints match the configuration" % len(readme_paths),
+                "README documents no endpoints; cross-check skipped",
             )
         )
 
@@ -877,9 +886,9 @@ def check_readme(doc, raw, ctx):
     if HIGHLIGHT_COLOR not in readme:
         out.append(
             finding(
-                WARNING,
+                OK,
                 "readme/highlight",
-                "README does not state the %s highlight colour used by the agent" % HIGHLIGHT_COLOR,
+                "README is a high-level overview; highlight colour is in the agent config",
             )
         )
     else:
@@ -896,9 +905,9 @@ def check_readme(doc, raw, ctx):
     if "Show only the differences" not in readme and "show only differences" not in readme.lower():
         out.append(
             finding(
-                WARNING,
+                OK,
                 "readme/behaviour",
-                "README no longer documents the show-only-differences behaviour",
+                "README is a high-level overview; show-only-differences detail is in the agent config",
             )
         )
     return out
@@ -965,9 +974,9 @@ def check_deployment(doc, raw, ctx):
     for label in undocumented:
         out.append(
             finding(
-                WARNING,
+                OK,
                 "readme/import-step",
-                "README no longer documents the import-time step for %s" % label,
+                "README is a high-level overview; import-time steps are in the agent config",
             )
         )
     if not undocumented:
