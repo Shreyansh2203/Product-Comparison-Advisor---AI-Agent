@@ -886,9 +886,9 @@ def check_readme(doc, raw, ctx):
     if HIGHLIGHT_COLOR not in readme:
         out.append(
             finding(
-                OK,
+                ERROR,
                 "readme/highlight",
-                "README is a high-level overview; highlight colour is in the agent config",
+                "README does not state the %s highlight colour used by the agent" % HIGHLIGHT_COLOR,
             )
         )
     else:
@@ -905,9 +905,9 @@ def check_readme(doc, raw, ctx):
     if "Show only the differences" not in readme and "show only differences" not in readme.lower():
         out.append(
             finding(
-                OK,
+                WARNING,
                 "readme/behaviour",
-                "README is a high-level overview; show-only-differences detail is in the agent config",
+                "README no longer documents the show-only-differences behaviour",
             )
         )
     return out
@@ -974,9 +974,9 @@ def check_deployment(doc, raw, ctx):
     for label in undocumented:
         out.append(
             finding(
-                OK,
+                ERROR,
                 "readme/import-step",
-                "README is a high-level overview; import-time steps are in the agent config",
+                "README no longer documents the import-time step for %s" % label,
             )
         )
     if not undocumented:

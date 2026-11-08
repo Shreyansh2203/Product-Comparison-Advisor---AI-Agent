@@ -14,18 +14,20 @@
 <details open>
 <summary><b>Table of Contents</b></summary>
 
-- [Overview](#-overview)
-- [What This Is](#-what-this-is)
-- [Artifacts](#-artifacts)
-- [Project Structure](#-project-structure)
-- [Quick Start](#-quick-start)
-- [Validation](#-validation)
-- [Agent Configuration](#-agent-configuration)
-- [Tech Stack](#-tech-stack)
-- [Testing](#-testing)
-- [Deployment](#-deployment)
-- [Contributing](#-contributing)
-- [License](#-license)
+- [Overview](#overview)
+- [What This Is](#what-this-is)
+- [Data Flow & Tools](#data-flow--tools)
+- [Artifacts](#artifacts)
+- [Project Structure](#project-structure)
+- [Quick Start](#quick-start)
+- [Validation](#validation)
+- [Agent Configuration](#agent-configuration)
+- [Known Limitations](#known-limitations)
+- [Tech Stack](#tech-stack)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Contributing](#contributing)
+- [License](#license)
 
 </details>
 
@@ -53,6 +55,27 @@ If you're looking for a runnable service, this is not it. If you're managing the
 
 ---
 
+## Data Flow & Tools
+
+```mermaid
+sequenceDiagram
+    User->>Agent: Compare Item A and Item B
+    Agent->>Oracle: Get_Operational_Attribute_Values (ItemId)
+    Agent->>Oracle: Get_Extended_Attribute_Values (ItemId)
+    Agent->>Oracle: getProductCosts (ItemNumber)
+    Agent-->>User: Side-by-side comparison (#ffe6e6 differences)
+```
+
+The agent uses three read-only GET tools to query Oracle SCM Cloud APIs:
+
+- **`Get_Operational_Attribute_Values`**: Queries `/fscmRestApi/resources/11.13.18.05/itemOperationalAttributes` for core operational and manufacturing attributes.
+- **`Get_Extended_Attribute_Values`**: Queries `/fscmRestApi/resources/11.13.18.05/itemExtendedAttributes` for user-defined descriptive flexfield attributes.
+- **`getProductCosts`**: Queries `/fscmRestApi/resources/11.13.18.05/itemsV2` for unit and item manufacturing costs.
+
+Output format: **Show only the differences** between items in side-by-side comparison tables, highlighting differing cells using background colour `#ffe6e6`.
+
+---
+
 ## Artifacts
 
 | Artifact | Purpose |
@@ -63,7 +86,6 @@ If you're looking for a runnable service, this is not it. If you're managing the
 | `scripts/prompt_fixtures.py` | Reusable prompt fixtures for tests |
 | `tests/test_agent_config.py` | Agent configuration assertions |
 | `tests/test_attribute_count.py` | Attribute count validation |
-| `tests/test_prompt_contract.py` | Prompt contract tests |
 
 ---
 
@@ -83,8 +105,7 @@ Product-Comparison-Advisor/
 │   └── prompt_fixtures.py      # prompt fixtures
 ├── tests/
 │   ├── test_agent_config.py
-│   ├── test_attribute_count.py
-│   └── test_prompt_contract.py
+│   └── test_attribute_count.py
 ├── .pre-commit-config.yaml
 ├── .gitignore
 └── LICENSE
@@ -107,7 +128,7 @@ cd Product-Comparison-Advisor
 python scripts/validate_agent.py PRODUCT_COMPARATOR_V13.json
 
 # Run the full test suite
-python -m pytest tests/ -q
+python -m unittest discover -s tests -v
 ```
 
 ### Docker
@@ -133,7 +154,7 @@ Run locally:
 
 ```bash
 # All tests
-python -m pytest tests/ -q
+python -m unittest discover -s tests -v
 
 # Agent validation only
 python scripts/validate_agent.py PRODUCT_COMPARATOR_V13.json
@@ -173,14 +194,27 @@ Key model properties:
 - **Max completion tokens:** 8000
 - **Reasoning effort:** medium
 
-Error handlers include an **EMAIL** handler with `toList`, `ccList`, `subject`, and `body` inputs.
+---
+
+## Known Limitations
+
+The validator asserts that any unresolvable Oracle export facts are explicitly recorded rather than silently ignored:
+
+| Code | Reason |
+|---|---|
+| `model-code` | Oracle assigns modelConfiguration.code when the agent is exported, and the model is selected by model/modelName/provider rather than by this code. |
+| `partner-metadata` | partnerMetadata.Name is an opaque four-character value whose provenance is not recorded anywhere in this repository. |
+| `pipeline/error-handler` | The EMAIL error handler's recipient, subject, and body are tenant facts configured at import time. |
+| `trigger/rest-empty` | The REST trigger's endpoint contract belongs to whichever system calls the agent and is configured at import time. |
+| `max-interactions/scope` | The document declares two fields named MaximumInteractions: the agent's (20), and team-level budget. |
+| `tool/parameter-unbound` | getProductCosts declares four ProductCosts.* filter parameters that never appear in its resourcePath. |
 
 ---
 
 ## Tech Stack
 
 - [Python 3.12+](https://www.python.org/)
-- [pytest](https://docs.pytest.org/) — testing
+- [unittest](https://docs.python.org/3/library/unittest.html) — testing
 - [CodeQL](https://codeql.github.com/) — SAST
 - [Docker](https://www.docker.com/) — container definition
 
@@ -190,13 +224,10 @@ Error handlers include an **EMAIL** handler with `toList`, `ccList`, `subject`, 
 
 ```bash
 # Full suite
-python -m pytest tests/ -q
+python -m unittest discover -s tests -v
 
-# Specific test file
-python -m pytest tests/test_agent_config.py -v
-
-# Coverage (optional)
-python -m pytest tests/ --cov=scripts --cov-report=term
+# Agent validation only
+python scripts/validate_agent.py PRODUCT_COMPARATOR_V13.json
 ```
 
 CI enforces all tests passing on `main` and pull requests.
@@ -207,11 +238,15 @@ CI enforces all tests passing on `main` and pull requests.
 
 This is configuration-only. There is no runtime to deploy. The `Dockerfile` produces a validation image that runs `validate_agent.py` against `PRODUCT_COMPARATOR_V13.json` — suitable for CI/CD gating, not for serving traffic.
 
+When importing into Oracle Cloud Infrastructure AI Agent Studio, two import-time steps must be finished by the operator:
+1. **`errorHandlers`**: Configure the recipient email address (`toList`), subject, and body for pipeline errors.
+2. **`triggers`**: Define the REST trigger calling endpoint contract and authentication scheme for inbound requests.
+
 To promote a new agent version:
 1. Edit `PRODUCT_COMPARATOR_V13.json`
 2. Update version in the filename if major (e.g. `V14`)
-3. Run `python scripts/validate_agent.py`
-4. Run `python -m pytest tests/ -q`
+3. Run `python scripts/validate_agent.py PRODUCT_COMPARATOR_V13.json`
+4. Run `python -m unittest discover -s tests -v`
 5. Commit and open a Pull Request
 
 ---
@@ -237,6 +272,6 @@ Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.
 **Made with ❤️ by [Shreyansh Srivastava](https://github.com/Shreyansh2203)**
 
 [![GitHub stars](https://img.shields.io/github/stars/Shreyansh2203/Product-Comparison-Advisor---AI-Agent?style=social)](https://github.com/Shreyansh2203/Product-Comparison-Advisor---AI-Agent/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/Shreyansh2203/Product-Comparison-Advisor---AI-Agent?style=social)](https://github.com/Shreyansh2203/Product-Comparison-Advisor---AI-Agent/network)
+[![GitHub forks](https://img.shields.io/github/forks/Shreyansh2203/Product-Comparison-Advisor---AI-Agent/network)](https://github.com/Shreyansh2203/Product-Comparison-Advisor---AI-Agent/network)
 
 </div>

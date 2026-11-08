@@ -203,7 +203,6 @@ class PipelineGraphIsWalkable(unittest.TestCase):
 
 
 @unittest.skipIf(not README, "README.md not found")
-@unittest.skip("README rewritten - documentation removed")
 class RestEndpointsAreConsistent(unittest.TestCase):
     def test_api_version_is_11_13_18_05_everywhere(self):
         paths = []
@@ -349,7 +348,6 @@ class NoSecretsOrCustomerData(unittest.TestCase):
 
 
 @unittest.skipIf(not README, "README.md not found")
-@unittest.skip("README rewritten - documentation removed")
 class ReadmeMatchesConfiguration(unittest.TestCase):
     def test_readme_references_the_real_file_name(self):
         self.assertIn("PRODUCT_COMPARATOR_V13.json", README)
@@ -375,7 +373,6 @@ class ReadmeMatchesConfiguration(unittest.TestCase):
 
 
 @unittest.skipIf(not README, "README.md not found")
-@unittest.skip("README rewritten - documentation removed")
 class WarningTriageIsMeaningful(unittest.TestCase):
     """The validator must separate real problems from acknowledged facts.
 
@@ -401,7 +398,6 @@ class WarningTriageIsMeaningful(unittest.TestCase):
             "every finding on the shipped configuration must be OK or explicitly accepted",
         )
 
-    @unittest.skip("README rewritten - documentation removed")
     def test_accepted_findings_are_exactly_the_documented_six(self):
         accepted = sorted(
             f.code for f in self._findings() if f.level == validate_agent.ACCEPTED
@@ -473,7 +469,6 @@ class WarningTriageIsMeaningful(unittest.TestCase):
         # itself an unacknowledged warning, so --no-readme and --strict conflict.
         self.assertEqual(validate_agent.main([CONFIG_PATH, "--quiet"]), 0)
 
-    @unittest.skip("README cross-checks are now non-fatal")
     def test_strict_mode_fails_on_a_new_unacknowledged_warning(self):
         readme = README.replace("Show only the differences", "show what differs")
         findings = self._findings(readme=readme)
@@ -481,7 +476,6 @@ class WarningTriageIsMeaningful(unittest.TestCase):
 
 
 @unittest.skipIf(not README, "README.md not found")
-@unittest.skip("README rewritten - documentation removed")
 class ImportTimeStepsAreDeclared(unittest.TestCase):
     """The two things only an operator can finish must stay declared and documented."""
 
@@ -524,7 +518,6 @@ class ImportTimeStepsAreDeclared(unittest.TestCase):
 
 
 @unittest.skipIf(not README, "README.md not found")
-@unittest.skip("README rewritten - documentation removed")
 class ValidatorBehavesLikeAGate(unittest.TestCase):
     """Negative tests: the validator must fail on each defect it claims to catch."""
 
